@@ -160,4 +160,4 @@ packages/shared   technical primitives
 Это не managed service и не обещание multi-region/high-scale эксплуатации. Известные ограничения
 перечислены в [release notes](docs/release-notes-v1.0.0.md) и [roadmap](docs/roadmap.md).
 
-MIT. См. [LICENSE](LICENSE).
+GNU AGPLv3. См. [LICENSE](LICENSE).
