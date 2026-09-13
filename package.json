@@ -1,0 +1,52 @@
+{
+  "name": "nehemiah",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Project Director for human + AI development teams",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "build": "tsc -b --pretty false",
+    "clean": "tsc -b --clean --pretty false",
+    "dev": "pnpm --parallel --filter @nehemiah/api --filter @nehemiah/discord --filter @nehemiah/worker dev",
+    "dev:api": "pnpm --filter @nehemiah/api dev",
+    "dev:discord": "pnpm --filter @nehemiah/discord dev",
+    "dev:worker": "pnpm --filter @nehemiah/worker dev",
+    "start:api": "pnpm --filter @nehemiah/api start",
+    "start:discord": "pnpm --filter @nehemiah/discord start",
+    "start:worker": "pnpm --filter @nehemiah/worker start",
+    "discord:deploy": "pnpm --filter @nehemiah/discord deploy-commands",
+    "db:migrate": "pnpm --filter @nehemiah/database migrate",
+    "db:seed": "pnpm --filter @nehemiah/database seed",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.test.json --pretty false",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude '**/*.integration.test.ts'",
+    "test:integration": "vitest run apps/api/src/build-app.test.ts packages/database/src/database.test.ts packages/github/src/github.test.ts",
+    "test:coverage": "vitest run --coverage",
+    "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.8.1",
+    "globals": "17.4.0",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "fast-uri@3": "^3.1.6",
+    "fast-uri@4": "^4.1.3"
+  }
+}

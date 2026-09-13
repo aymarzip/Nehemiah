@@ -1,0 +1,19 @@
+{
+  "name": "@nehemiah/discord",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "dev": "tsx --tsconfig ../../tsconfig.runtime.json --env-file-if-exists=../../.env watch src/main.ts",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "deploy-commands": "tsx --tsconfig ../../tsconfig.runtime.json --env-file-if-exists=../../.env src/deploy-commands.ts"
+  },
+  "dependencies": {
+    "@nehemiah/config": "workspace:*",
+    "@nehemiah/discord-kit": "workspace:*",
+    "@nehemiah/observability": "workspace:*",
+    "discord.js": "catalog:"
+  }
+}

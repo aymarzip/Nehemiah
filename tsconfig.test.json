@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@nehemiah/shared": ["./packages/shared/src/index.ts"],
+      "@nehemiah/core": ["./packages/core/src/index.ts"],
+      "@nehemiah/config": ["./packages/config/src/index.ts"],
+      "@nehemiah/observability": ["./packages/observability/src/index.ts"],
+      "@nehemiah/llm": ["./packages/llm/src/index.ts"],
+      "@nehemiah/database": ["./packages/database/src/index.ts"],
+      "@nehemiah/github": ["./packages/github/src/index.ts"],
+      "@nehemiah/discord-kit": ["./packages/discord-kit/src/index.ts"]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["apps/**/*.test.ts", "packages/**/*.test.ts", "vitest.config.ts"]
+}

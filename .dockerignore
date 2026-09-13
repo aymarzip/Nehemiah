@@ -1,0 +1,15 @@
+.git
+.github
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+.pnpm-store
+.release-smoke
+node_modules
+**/dist
+coverage
+*.log
+*.tsbuildinfo
+docs

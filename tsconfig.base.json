@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@nehemiah/config": ["./packages/config/src/index.ts"],
+      "@nehemiah/core": ["./packages/core/src/index.ts"],
+      "@nehemiah/database": ["./packages/database/src/index.ts"],
+      "@nehemiah/discord-kit": ["./packages/discord-kit/src/index.ts"],
+      "@nehemiah/github": ["./packages/github/src/index.ts"],
+      "@nehemiah/llm": ["./packages/llm/src/index.ts"],
+      "@nehemiah/observability": ["./packages/observability/src/index.ts"],
+      "@nehemiah/shared": ["./packages/shared/src/index.ts"]
+    },
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "skipLibCheck": true
+  }
+}

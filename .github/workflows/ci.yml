@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Node 24 / PostgreSQL 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18.6-bookworm
+        env:
+          POSTGRES_DB: nehemiah
+          POSTGRES_USER: nehemiah
+          POSTGRES_PASSWORD: nehemiah
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nehemiah -d nehemiah"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://nehemiah:nehemiah@localhost:5432/nehemiah
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm 11.21.0
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.21.0
+          run_install: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies from lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: PostgreSQL 18 migration smoke
+        run: |
+          pnpm db:migrate
+          pnpm db:migrate
+
+      - name: Build production containers
+        run: |
+          docker build --target api --tag nehemiah-api:ci .
+          docker build --target worker --tag nehemiah-worker:ci .
+          docker build --target discord --tag nehemiah-discord:ci .
+          docker build --target migration --tag nehemiah-migration:ci .

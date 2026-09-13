@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/core" },
+    { "path": "packages/config" },
+    { "path": "packages/observability" },
+    { "path": "packages/llm" },
+    { "path": "packages/database" },
+    { "path": "packages/github" },
+    { "path": "packages/discord-kit" },
+    { "path": "apps/api" },
+    { "path": "apps/discord" },
+    { "path": "apps/worker" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@nehemiah/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "dev": "tsx --tsconfig ../../tsconfig.runtime.json --env-file-if-exists=../../.env watch src/main.ts",
+    "start": "node --env-file-if-exists=../../.env dist/main.js"
+  },
+  "dependencies": {
+    "@nehemiah/config": "workspace:*",
+    "@nehemiah/core": "workspace:*",
+    "@nehemiah/database": "workspace:*",
+    "@nehemiah/github": "workspace:*",
+    "@nehemiah/llm": "workspace:*",
+    "@nehemiah/observability": "workspace:*",
+    "@nehemiah/shared": "workspace:*",
+    "fastify": "catalog:",
+    "zod": "catalog:"
+  }
+}

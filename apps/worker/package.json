@@ -1,0 +1,18 @@
+{
+  "name": "@nehemiah/worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "dev": "tsx --tsconfig ../../tsconfig.runtime.json --env-file-if-exists=../../.env watch src/main.ts",
+    "start": "node --env-file-if-exists=../../.env dist/main.js"
+  },
+  "dependencies": {
+    "@nehemiah/config": "workspace:*",
+    "@nehemiah/database": "workspace:*",
+    "@nehemiah/github": "workspace:*",
+    "@nehemiah/observability": "workspace:*"
+  }
+}
