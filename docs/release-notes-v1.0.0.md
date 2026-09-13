@@ -54,7 +54,7 @@ required before adopting the release.
 - Live AI adapters are transport-tested but model revisions, quotas, regions, and vendor policies
   require deployment-specific conformance testing.
 - Discord setup drafts are process-memory state; confirmed projects are durable. Very large lists
-  do not yet have comprehensive pagination.
+  do not yet have full pagination.
 - Metrics are process-local. Nehemiah does not ship a WAF, managed backup/restore, multi-region
   failover, SLO dashboard, or load/chaos certification.
 - The internal API uses a shared service token and must not be treated as a public end-user API.

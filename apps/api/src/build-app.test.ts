@@ -7,7 +7,7 @@ import {
   InMemoryWebhookInbox,
   signGitHubWebhook,
 } from "@nehemiah/github";
-import { createLlmRegistry } from "@nehemiah/llm";
+import { createLlmRegistry, FakeProvider, fakeJsonResponse, LlmRegistry } from "@nehemiah/llm";
 import { createLogger } from "@nehemiah/observability";
 import { buildApp } from "./build-app.js";
 import { createConfiguredLlmRegistry } from "./llm-configuration.js";
@@ -707,6 +707,80 @@ describe("Phase 1 HTTP vertical slice", () => {
         payload,
       });
       expect(invalid.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects adversarial LLM decomposition returning dependency cycle as 502 INVALID_MODEL_OUTPUT", async () => {
+    const config = testConfig("fake");
+    const adversarialProvider = new FakeProvider({
+      scenarios: [
+        {
+          name: "cyclic-decomposition",
+          matches: ({ request }) => request.metadata?.["operation"] === "task_decomposition",
+          response: fakeJsonResponse({
+            tasks: [
+              {
+                key: "cycle-a",
+                title: "Cycle A",
+                description: "Cycle task A",
+                expectedOutcome: "A exists",
+                estimatedEffortHours: 2,
+                impact: "HIGH",
+                riskLevel: "HIGH",
+                dependencyKeys: ["cycle-b"],
+                verificationRequirements: ["Check A"],
+                suggestedEvidence: ["COMMIT"],
+                deadlineCriticality: "IMPORTANT",
+                scopeTier: "MUST",
+              },
+              {
+                key: "cycle-b",
+                title: "Cycle B",
+                description: "Cycle task B",
+                expectedOutcome: "B exists",
+                estimatedEffortHours: 2,
+                impact: "HIGH",
+                riskLevel: "HIGH",
+                dependencyKeys: ["cycle-a"],
+                verificationRequirements: ["Check B"],
+                suggestedEvidence: ["COMMIT"],
+                deadlineCriticality: "IMPORTANT",
+                scopeTier: "MUST",
+              },
+            ],
+          }),
+        },
+      ],
+    });
+    const app = buildApp({
+      config,
+      store: new InMemoryProjectStore(),
+      llm: new LlmRegistry([adversarialProvider]),
+      logger: logger(),
+    });
+    try {
+      const setup = await app.inject({
+        method: "POST",
+        url: "/v1/projects/setup",
+        headers: internalHeaders,
+        payload: setupPayload,
+      });
+      const { projectId } = setup.json<{ projectId: string }>();
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/projects/${projectId}/decompose`,
+        headers: internalHeaders,
+        payload: { externalUserId: "owner-user", goal: "Adversarial cyclic task decomposition" },
+      });
+
+      expect(response.statusCode).toBe(502);
+      expect(response.json()).toMatchObject({
+        code: "INVALID_MODEL_OUTPUT",
+        message: expect.stringContaining("Task dependency cycle detected"),
+      });
     } finally {
       await app.close();
     }

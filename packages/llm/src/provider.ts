@@ -67,6 +67,14 @@ export abstract class BaseLlmProvider implements LlmProvider {
     const response = await this.generate(
       {
         ...generateRequest,
+        ...(generateRequest.tools === undefined
+          ? {}
+          : {
+              tools: generateRequest.tools.map((tool) => ({
+                ...tool,
+                inputSchema: pruneJsonSchema(tool.inputSchema),
+              })),
+            }),
         responseFormat:
           support === "json_object"
             ? { type: "json_object" }

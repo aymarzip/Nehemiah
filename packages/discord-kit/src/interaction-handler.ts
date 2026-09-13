@@ -660,8 +660,9 @@ async function handleTeamModal(
   options: InteractionHandlerOptions,
 ): Promise<void> {
   const guildId = requireGuild(interaction);
-  const hoursPerWeek = Number(interaction.fields.getTextInputValue("hours"));
-  if (!Number.isFinite(hoursPerWeek) || hoursPerWeek < 0 || hoursPerWeek > 168) {
+  const hoursRaw = interaction.fields.getTextInputValue("hours").trim();
+  const hoursPerWeek = Number(hoursRaw);
+  if (hoursRaw === "" || !Number.isFinite(hoursPerWeek) || hoursPerWeek < 0 || hoursPerWeek > 168) {
     throw new DirectorApiError(400, "Available hours must be between 0 and 168.");
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });

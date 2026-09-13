@@ -789,6 +789,38 @@ describe("Interaction Handler", () => {
         }),
       );
     });
+
+    it("rejects team join modal with empty or whitespace hours", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const modal = {
+        id: "modal-empty-hours",
+        isChatInputCommand: () => false,
+        isButton: () => false,
+        isModalSubmit: () => true,
+        isRepliable: () => true,
+        inGuild: () => true,
+        guildId: "guild-1",
+        customId: "team-join",
+        user: { id: "user-1", username: "alice", globalName: "Alice" },
+        member: { displayName: "Alice" },
+        fields: {
+          getTextInputValue: (field: string) => (field === "hours" ? "   " : "test"),
+        },
+        deferReply: vi.fn().mockResolvedValue(undefined),
+        editReply: vi.fn().mockResolvedValue(undefined),
+        reply: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await handler(modal as never);
+
+      expect(modal.reply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: "Available hours must be between 0 and 168.",
+        }),
+      );
+    });
   });
 
   describe("error handling", () => {

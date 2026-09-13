@@ -69,14 +69,25 @@ process.once("SIGINT", onSigint);
 process.once("SIGTERM", onSigterm);
 
 logger.info({ storage: config.storage.driver }, "Worker started");
-await runWorkerLoop({
-  processor: new GitHubWebhookProcessor(inbox, handler),
-  logger,
-  pollIntervalMs: config.worker.pollIntervalMs,
-  batchSize: config.worker.batchSize,
-  signal: abortController.signal,
-});
-await close();
+try {
+  await runWorkerLoop({
+    processor: new GitHubWebhookProcessor(inbox, handler),
+    logger,
+    pollIntervalMs: config.worker.pollIntervalMs,
+    batchSize: config.worker.batchSize,
+    signal: abortController.signal,
+  });
+} catch (error) {
+  logger.error({ err: error }, "Worker loop terminated unexpectedly");
+  process.exitCode = 1;
+} finally {
+  try {
+    await close();
+  } catch (error) {
+    logger.error({ err: error }, "Worker storage close failed");
+    process.exitCode = 1;
+  }
+}
 logger.info("Worker stopped");
 if (shutdownDeadline !== undefined) {
   clearTimeout(shutdownDeadline);

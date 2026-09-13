@@ -9,6 +9,8 @@ import {
   CommunicationPreferences,
   Project,
   ProjectDirector,
+  CycleDetectedError,
+  DomainValidationError,
   GitHubIntelligenceService,
   ProjectVision,
   RecommendationEngine,
@@ -1004,6 +1006,14 @@ export class Phase2ApplicationService {
           502,
           "INVALID_MODEL_OUTPUT",
           "The provider returned a task plan that failed schema validation.",
+          { cause: error },
+        );
+      }
+      if (error instanceof DomainValidationError || error instanceof CycleDetectedError) {
+        throw new DirectorServiceError(
+          502,
+          "INVALID_MODEL_OUTPUT",
+          `The provider returned an invalid task plan: ${error.message}`,
           { cause: error },
         );
       }

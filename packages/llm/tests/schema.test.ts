@@ -133,4 +133,33 @@ describe("local JSON Schema dialect", () => {
     );
     expect(provider.invocations).toHaveLength(0);
   });
+
+  it("prunes tool parameter schemas when passed to generateStructured", async () => {
+    const provider = new FakeProvider({
+      scenarios: [{ response: fakeJsonResponse({ answer: "ok" }) }],
+    });
+
+    await provider.generateStructured({
+      messages: [message("user", "compute")],
+      schema: { type: "object", properties: { answer: { type: "string" } }, required: ["answer"] },
+      tools: [
+        {
+          name: "calc",
+          description: "Calculator",
+          inputSchema: {
+            $schema: "https://json-schema.org/draft/2020-12/schema",
+            $comment: "strip this",
+            title: "CalcParams",
+            type: "object",
+            properties: { expr: { type: "string" } },
+          },
+        },
+      ],
+    });
+
+    expect(provider.invocations[0]?.request.tools?.[0]?.inputSchema).toEqual({
+      type: "object",
+      properties: { expr: { type: "string" } },
+    });
+  });
 });
