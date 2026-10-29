@@ -25,6 +25,13 @@ export * from "./services/scope-engine.js";
 export * from "./services/github-intelligence.js";
 export * from "./services/notification-policy.js";
 export * from "./services/checkpoint-service.js";
+export * from "./services/goal-service.js";
+export * from "./services/browser-service.js";
+export * from "./services/grill-engine.js";
+export * from "./services/teamwork-preview-service.js";
+export * from "./services/learning-engine.js";
+export * from "./services/boost-engine.js";
+export * from "./services/graph-slicer.js";
 
 export * from "./application/project-director.js";
 

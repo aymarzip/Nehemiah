@@ -131,6 +131,172 @@ function createMockApi(): DiscordDirectorApi {
       },
     ]),
     joinTeam: vi.fn().mockResolvedValue({ memberId: "mem-1" }),
+    goalStatus: vi.fn().mockResolvedValue({
+      projectId: "proj-1",
+      name: "Nehemiah Game",
+      progress: {
+        goalStatement: "Ship v1.0",
+        totalTasks: 10,
+        completedTasks: 7,
+        percentage: 70,
+        mustHaveTasks: 5,
+        completedMustHaveTasks: 4,
+        mustHavePercentage: 80,
+        primaryMilestone: "Alpha",
+        targetDate: "2026-08-15T00:00:00Z",
+        unalignedTasks: [{ id: "t-99", title: "Side quest", reason: "Not aligned" }],
+      },
+    }),
+    updateGoal: vi.fn().mockResolvedValue({
+      projectId: "proj-1",
+      name: "Nehemiah Game",
+      progress: {
+        goalStatement: "Ship v1.0 revised",
+        totalTasks: 10,
+        completedTasks: 7,
+        percentage: 70,
+        mustHaveTasks: 5,
+        completedMustHaveTasks: 4,
+        mustHavePercentage: 80,
+        primaryMilestone: "Alpha",
+        targetDate: "2026-08-15T00:00:00Z",
+        unalignedTasks: [],
+      },
+    }),
+    browserRepo: vi.fn().mockResolvedValue({
+      projectId: "proj-1",
+      githubRepository: "owner/repo",
+      activities: [
+        {
+          kind: "PUSH",
+          externalId: "abc1234",
+          branch: "main",
+          url: "https://github.com/owner/repo/commit/abc",
+          occurredAt: "2026-08-13T00:00:00Z",
+        },
+      ],
+    }),
+    browserDoc: vi.fn().mockResolvedValue({
+      url: "https://example.com/docs",
+      title: "API Reference",
+      text: "Summary text for the API reference doc.",
+      headings: ["Overview", "Authentication"],
+      links: ["https://example.com/login"],
+      fetchedAt: "2026-08-13T00:00:00Z",
+    }),
+    browserSearch: vi.fn().mockResolvedValue({
+      query: "database",
+      results: [
+        {
+          sourceKind: "DECISION",
+          title: "Use SQLite",
+          snippet: "Zero-dependency local database",
+          score: 3,
+          date: "2026-08-13T00:00:00Z",
+        },
+      ],
+    }),
+    grillStart: vi.fn().mockResolvedValue({
+      topic: "Caching",
+      questions: [
+        {
+          pillar: "PERFORMANCE",
+          question: "What cache eviction strategy?",
+          tradeoff: "Higher CPU vs hit rate",
+          options: [
+            { key: "A", label: "LRU", pros: "Higher hit rate", cons: "Higher CPU" },
+            { key: "B", label: "FIFO", pros: "Simpler logic", cons: "Suboptimal hit rate" },
+          ],
+          recommendedOptionKey: "A",
+        },
+      ],
+    }),
+    grillAnswer: vi.fn().mockResolvedValue({
+      draft: {
+        title: "Cache Strategy: LRU",
+        description: "Use LRU",
+        outcome: "Adopt LRU",
+        context: "High throughput read cache",
+        rationale: "Maintains hottest items",
+        alternatives: ["FIFO"],
+        type: "TECHNICAL",
+      },
+      decisionId: "dec-123",
+    }),
+    teamworkPreview: vi.fn().mockResolvedValue({
+      totalMembers: 2,
+      overloadedMembersCount: 0,
+      members: [
+        {
+          memberId: "m1",
+          displayName: "Alice",
+          roles: ["DEVELOPER"],
+          assignedTasksCount: 3,
+          activeTasksCount: 2,
+          estimatedHoursRemaining: 20,
+          hoursPerWeek: 30,
+          workloadRatio: 0.67,
+          loadCategory: "BALANCED",
+          blockedTasksCount: 0,
+          aiTools: ["Cursor"],
+        },
+      ],
+      handoffs: [
+        {
+          waitingMemberId: "m2",
+          waitingMemberName: "Bob",
+          blockedTaskId: "t2",
+          blockedTaskTitle: "Level 1",
+          blockingMemberId: "m1",
+          blockingMemberName: "Alice",
+          dependencyTaskId: "t1",
+          dependencyTaskTitle: "Engine",
+        },
+      ],
+      bottleneckMemberIds: ["m1"],
+    }),
+    learningInsights: vi.fn().mockResolvedValue({
+      completedTasksCount: 10,
+      resolvedBlockersCount: 2,
+      averageEffortHours: 4.5,
+      primaryBlockerSource: "DEPENDENCY",
+      insights: [
+        {
+          category: "VELOCITY",
+          title: "Steady progress",
+          observation: "Tasks completed on schedule",
+          recommendation: "Maintain cadence",
+        },
+      ],
+    }),
+    learningRecord: vi.fn().mockResolvedValue({
+      id: "lr-1",
+      title: "Verify contract schemas",
+      lesson: "Run integration tests against mocked endpoints.",
+    }),
+    boostTask: vi.fn().mockResolvedValue({
+      taskId: "t1",
+      title: "Engine Setup",
+      executionBlueprint: ["Install dependencies", "Configure pipeline"],
+      verificationChecklist: ["Run test suite", "Verify output"],
+      aiPromptTemplate: "Act as an expert dev to setup the engine...",
+    }),
+    boostUnblock: vi.fn().mockResolvedValue([
+      {
+        blockerId: "b1",
+        description: "Waiting on assets",
+        severity: "HIGH",
+        tacticalSteps: ["Use geometric placeholders", "Mock sound channels"],
+        estimatedTimeSavedHours: 6,
+      },
+    ]),
+    boostSuggest: vi.fn().mockResolvedValue([
+      {
+        type: "PARALLEL",
+        description: "Tasks t1 and t2 can run concurrently.",
+        affectedTaskIds: ["t1", "t2"],
+      },
+    ]),
   };
 }
 
@@ -515,6 +681,259 @@ describe("Interaction Handler", () => {
       expect(api.listBlockers).toHaveBeenCalledWith("guild-1", "user-1");
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.objectContaining({ content: "No open blockers." }),
+      );
+    });
+  });
+
+  describe("goal commands", () => {
+    it("handles /goal status", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("status");
+      interaction.commandName = "goal";
+
+      await handler(interaction as never);
+
+      expect(api.goalStatus).toHaveBeenCalledWith("guild-1", "user-1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /goal set", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("set", {
+        statement: "Ship v1.0 on time",
+        outcome: "Fully verified release",
+        criteria: "all tests pass, zero blockers",
+      });
+      interaction.commandName = "goal";
+
+      await handler(interaction as never);
+
+      expect(api.updateGoal).toHaveBeenCalledWith("guild-1", "user-1", {
+        statement: "Ship v1.0 on time",
+        targetOutcome: "Fully verified release",
+        successCriteria: ["all tests pass", "zero blockers"],
+      });
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+  });
+
+  describe("browser commands", () => {
+    it("handles /browser repo", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("repo");
+      interaction.commandName = "browser";
+
+      await handler(interaction as never);
+
+      expect(api.browserRepo).toHaveBeenCalledWith("guild-1", "user-1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /browser repo when not connected", async () => {
+      const api = createMockApi();
+      (api.browserRepo as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        projectId: "proj-1",
+        githubRepository: null,
+        activities: [],
+      });
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("repo");
+      interaction.commandName = "browser";
+
+      await handler(interaction as never);
+
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining("No GitHub repository") }),
+      );
+    });
+
+    it("handles /browser doc", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("doc", { url: "https://example.com/docs" });
+      interaction.commandName = "browser";
+
+      await handler(interaction as never);
+
+      expect(api.browserDoc).toHaveBeenCalledWith("guild-1", "user-1", "https://example.com/docs");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /browser search", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("search", { query: "database" });
+      interaction.commandName = "browser";
+
+      await handler(interaction as never);
+
+      expect(api.browserSearch).toHaveBeenCalledWith("guild-1", "user-1", "database");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+  });
+
+  describe("grill-me commands", () => {
+    it("handles /grill-me start", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("start", { topic: "Caching", task_id: "t1" });
+      interaction.commandName = "grill-me";
+
+      await handler(interaction as never);
+
+      expect(api.grillStart).toHaveBeenCalledWith("guild-1", "user-1", "Caching", "t1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /grill-me answer", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("answer", {
+        topic: "Caching",
+        question: "q1",
+        option: "A",
+        notes: "LRU fits memory budget",
+        task_id: "t1",
+      });
+      interaction.commandName = "grill-me";
+
+      await handler(interaction as never);
+
+      expect(api.grillAnswer).toHaveBeenCalledWith("guild-1", "user-1", {
+        topic: "Caching",
+        answers: [{ question: "q1", selectedOptionKey: "A", notes: "LRU fits memory budget" }],
+        taskId: "t1",
+        saveAsDecision: true,
+      });
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+  });
+
+  describe("teamwork-preview commands", () => {
+    it("handles /teamwork-preview overview", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("overview");
+      interaction.commandName = "teamwork-preview";
+
+      await handler(interaction as never);
+
+      expect(api.teamworkPreview).toHaveBeenCalledWith("guild-1", "user-1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+  });
+
+  describe("learn commands", () => {
+    it("handles /learn insights", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("insights");
+      interaction.commandName = "learn";
+
+      await handler(interaction as never);
+
+      expect(api.learningInsights).toHaveBeenCalledWith("guild-1", "user-1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /learn record", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("record", {
+        title: "Verify contract schemas",
+        lesson: "Run integration tests against mocked endpoints.",
+        task_id: "t1",
+      });
+      interaction.commandName = "learn";
+
+      await handler(interaction as never);
+
+      expect(api.learningRecord).toHaveBeenCalledWith("guild-1", "user-1", {
+        title: "Verify contract schemas",
+        lesson: "Run integration tests against mocked endpoints.",
+        taskId: "t1",
+      });
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining("lr-1") }),
+      );
+    });
+  });
+
+  describe("boost commands", () => {
+    it("handles /boost task", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("task", { task_id: "t1" });
+      interaction.commandName = "boost";
+
+      await handler(interaction as never);
+
+      expect(api.boostTask).toHaveBeenCalledWith("guild-1", "user-1", "t1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /boost unblock", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("unblock");
+      interaction.commandName = "boost";
+
+      await handler(interaction as never);
+
+      expect(api.boostUnblock).toHaveBeenCalledWith("guild-1", "user-1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /boost suggest", async () => {
+      const api = createMockApi();
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("suggest");
+      interaction.commandName = "boost";
+
+      await handler(interaction as never);
+
+      expect(api.boostSuggest).toHaveBeenCalledWith("guild-1", "user-1");
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
       );
     });
   });

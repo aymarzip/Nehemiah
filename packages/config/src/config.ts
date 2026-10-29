@@ -51,6 +51,9 @@ const environmentSchema = z.object({
   AI_DECOMPOSITION_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(100).max(32_768).default(4_000),
   AI_MAX_CONTEXT_MEMORY_ITEMS: z.coerce.number().int().min(1).max(500).default(20),
   AI_MAX_CONTEXT_SIGNALS: z.coerce.number().int().min(1).max(100).default(10),
+  AI_MAX_GRAPH_TASKS_IN_CONTEXT: z.coerce.number().int().min(5).max(500).default(40),
+  AI_ENABLE_PROMPT_COMPACTING: z.stringbool().default(true),
+  AI_MAX_PROMPT_CHARS: z.coerce.number().int().min(2_000).max(200_000).default(24_000),
   AI_TEMPERATURE: z.coerce.number().min(0).max(2).optional(),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(30_000),
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(500).max(600_000).default(30_000),
@@ -81,6 +84,9 @@ export interface AppConfig {
     readonly decompositionMaxOutputTokens: number;
     readonly maxContextMemoryItems: number;
     readonly maxContextSignals: number;
+    readonly maxGraphTasksInContext: number;
+    readonly enablePromptCompacting: boolean;
+    readonly maxPromptChars: number;
     readonly temperature?: number;
     readonly timeoutMs: number;
   };
@@ -191,6 +197,9 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     decompositionMaxOutputTokens: raw.AI_DECOMPOSITION_MAX_OUTPUT_TOKENS,
     maxContextMemoryItems: raw.AI_MAX_CONTEXT_MEMORY_ITEMS,
     maxContextSignals: raw.AI_MAX_CONTEXT_SIGNALS,
+    maxGraphTasksInContext: raw.AI_MAX_GRAPH_TASKS_IN_CONTEXT,
+    enablePromptCompacting: raw.AI_ENABLE_PROMPT_COMPACTING,
+    maxPromptChars: raw.AI_MAX_PROMPT_CHARS,
     ...(raw.AI_TEMPERATURE === undefined ? {} : { temperature: raw.AI_TEMPERATURE }),
     timeoutMs: raw.AI_TIMEOUT_MS,
   };

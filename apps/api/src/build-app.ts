@@ -250,6 +250,9 @@ export function buildApp(options: BuildAppOptions) {
     maxOutputTokens: options.config.ai.maxOutputTokens,
     maxContextMemoryItems: options.config.ai.maxContextMemoryItems,
     maxContextSignals: options.config.ai.maxContextSignals,
+    maxGraphTasksInContext: options.config.ai.maxGraphTasksInContext,
+    enablePromptCompacting: options.config.ai.enablePromptCompacting,
+    maxPromptChars: options.config.ai.maxPromptChars,
     ...(options.config.ai.temperature === undefined
       ? {}
       : { temperature: options.config.ai.temperature }),
@@ -859,6 +862,159 @@ export function buildApp(options: BuildAppOptions) {
           );
         },
       );
+
+      api.get("/goal", async (request) => {
+        const query = z
+          .object({ discordGuildId: z.string().min(1), externalUserId: z.string().min(1) })
+          .parse(request.query);
+        return phase2.goalStatus(query.discordGuildId, query.externalUserId);
+      });
+
+      api.put("/goal", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+            statement: z.string().trim().min(1).max(4_000).optional(),
+            targetOutcome: z.string().trim().max(4_000).optional(),
+            successCriteria: z.array(z.string().trim().min(1)).max(50).optional(),
+          })
+          .parse(request.body);
+        return phase2.updateGoal(body.discordGuildId, body.externalUserId, body);
+      });
+
+      api.get("/browser/repo", async (request) => {
+        const query = z
+          .object({ discordGuildId: z.string().min(1), externalUserId: z.string().min(1) })
+          .parse(request.query);
+        return phase2.browserRepo(query.discordGuildId, query.externalUserId);
+      });
+
+      api.post("/browser/doc", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+            url: z.string().trim().url(),
+          })
+          .parse(request.body);
+        return phase2.browserDoc(body.discordGuildId, body.externalUserId, body.url);
+      });
+
+      api.get("/browser/search", async (request) => {
+        const query = z
+          .object({
+            discordGuildId: z.string().min(1),
+            externalUserId: z.string().min(1),
+            query: z.string().trim().min(1).max(500),
+          })
+          .parse(request.query);
+        return phase2.browserSearch(query.discordGuildId, query.externalUserId, query.query);
+      });
+
+      api.post("/grill-me/start", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+            topic: z.string().trim().min(1).max(500),
+            taskId: z.uuid().optional(),
+          })
+          .parse(request.body);
+        return phase2.grillStart(body.discordGuildId, body.externalUserId, body.topic, body.taskId);
+      });
+
+      api.post("/grill-me/answer", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+            topic: z.string().trim().min(1).max(500),
+            answers: z.array(
+              z.object({
+                question: z.string().trim().min(1),
+                selectedOptionKey: z.string().trim().min(1),
+                notes: z.string().trim().max(2_000).optional(),
+              }),
+            ),
+            taskId: z.uuid().optional(),
+            saveAsDecision: z.boolean().default(true),
+          })
+          .parse(request.body);
+        return phase2.grillAnswer(
+          body.discordGuildId,
+          body.externalUserId,
+          body.topic,
+          body.answers,
+          body.taskId,
+          body.saveAsDecision,
+        );
+      });
+
+      api.get("/teamwork-preview", async (request) => {
+        const query = z
+          .object({ discordGuildId: z.string().min(1), externalUserId: z.string().min(1) })
+          .parse(request.query);
+        return phase2.teamworkPreview(query.discordGuildId, query.externalUserId);
+      });
+
+      api.get("/learning/insights", async (request) => {
+        const query = z
+          .object({ discordGuildId: z.string().min(1), externalUserId: z.string().min(1) })
+          .parse(request.query);
+        return phase2.learningInsights(query.discordGuildId, query.externalUserId);
+      });
+
+      api.post("/learning/record", async (request, reply) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+            title: z.string().trim().min(1).max(300),
+            lesson: z.string().trim().min(1).max(10_000),
+            taskId: z.uuid().optional(),
+          })
+          .parse(request.body);
+        const result = await phase2.learningRecord(
+          body.discordGuildId,
+          body.externalUserId,
+          body.title,
+          body.lesson,
+          body.taskId,
+        );
+        return reply.status(201).send(result);
+      });
+
+      api.post("/boost/task", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+            taskId: z.uuid(),
+          })
+          .parse(request.body);
+        return phase2.boostTask(body.discordGuildId, body.externalUserId, body.taskId);
+      });
+
+      api.post("/boost/unblock", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+          })
+          .parse(request.body);
+        return phase2.boostUnblock(body.discordGuildId, body.externalUserId);
+      });
+
+      api.post("/boost/suggest", async (request) => {
+        const body = z
+          .object({
+            discordGuildId: z.string().trim().min(1),
+            externalUserId: z.string().trim().min(1),
+          })
+          .parse(request.body);
+        return phase2.boostSuggest(body.discordGuildId, body.externalUserId);
+      });
     },
     { prefix: "/v1" },
   );

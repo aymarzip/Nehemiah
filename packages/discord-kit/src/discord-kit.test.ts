@@ -15,6 +15,12 @@ describe("Discord commands", () => {
       "task",
       "producer",
       "blocker",
+      "goal",
+      "browser",
+      "grill-me",
+      "teamwork-preview",
+      "learn",
+      "boost",
     ]);
     expect(
       commands.find((command) => command.name === "project")?.options?.map((option) => option.name),

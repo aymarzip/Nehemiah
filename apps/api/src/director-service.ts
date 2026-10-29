@@ -9,6 +9,7 @@ import {
   TaskGraph,
   TaskStateMachine,
   TASK_STATUSES,
+  GraphSlicer,
   type TaskEvidenceKind,
   type TaskStatus,
 } from "@nehemiah/core";
@@ -207,6 +208,9 @@ export interface DirectorServiceOptions {
   readonly maxOutputTokens?: number;
   readonly maxContextMemoryItems?: number;
   readonly maxContextSignals?: number;
+  readonly maxGraphTasksInContext?: number;
+  readonly enablePromptCompacting?: boolean;
+  readonly maxPromptChars?: number;
   readonly temperature?: number;
 }
 
@@ -525,15 +529,33 @@ export class DirectorApplicationService {
       overallHealth: status.overallHealth,
     };
 
-    const trustedContext = compressContext({
+    const taskRecords = await this.#store.listTasks(project.id);
+    const coreTasks = taskRecords.map((t) => coreTask(t));
+    const slicer = new GraphSlicer();
+    const sliced = slicer.sliceForGeneralContext(
+      coreTasks,
+      dependenciesFor(taskRecords),
+      this.#options.maxGraphTasksInContext ?? 40,
+    );
+    const taskContext =
+      this.#options.enablePromptCompacting !== false
+        ? slicer.compactSummaries(sliced.tasks, sliced.dependencies)
+        : sliced.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status }));
+
+    let trustedContext = compressContext({
       project: {
         name: project.name,
         description: project.description ? project.description.slice(0, 1_000) : undefined,
         vision: project.vision ? project.vision.slice(0, 1_500) : undefined,
       },
       status: compactStatus,
+      activeTasks: taskContext,
       memory: selectedMemory,
     });
+    const maxChars = this.#options.maxPromptChars ?? 24_000;
+    if (trustedContext.length > maxChars) {
+      trustedContext = `${trustedContext.slice(0, maxChars - 3)}...`;
+    }
     try {
       const response = await this.#llm.generate({
         messages: [

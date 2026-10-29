@@ -185,8 +185,8 @@ export interface DiscordDirectorApi {
     input: {
       readonly description: string;
       readonly severity: string;
-      readonly blockedTaskId?: string;
-      readonly suggestedResolution?: string;
+      readonly blockedTaskId?: string | undefined;
+      readonly suggestedResolution?: string | undefined;
     },
   ): Promise<BlockerView>;
   listBlockers(discordGuildId: string, externalUserId: string): Promise<readonly BlockerView[]>;
@@ -195,7 +195,212 @@ export interface DiscordDirectorApi {
     externalUserId: string,
     blockerId: string,
   ): Promise<BlockerView>;
+  goalStatus(discordGuildId: string, externalUserId: string): Promise<GoalStatusView>;
+  updateGoal(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly statement?: string | undefined;
+      readonly targetOutcome?: string | undefined;
+      readonly successCriteria?: readonly string[] | undefined;
+    },
+  ): Promise<GoalStatusView>;
+  browserRepo(discordGuildId: string, externalUserId: string): Promise<BrowserRepoView>;
+  browserDoc(discordGuildId: string, externalUserId: string, url: string): Promise<BrowserDocView>;
+  browserSearch(
+    discordGuildId: string,
+    externalUserId: string,
+    query: string,
+  ): Promise<BrowserSearchView>;
+  grillStart(
+    discordGuildId: string,
+    externalUserId: string,
+    topic: string,
+    taskId?: string,
+  ): Promise<GrillQuestionnaireView>;
+  grillAnswer(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly topic: string;
+      readonly answers: readonly {
+        readonly question: string;
+        readonly selectedOptionKey: string;
+        readonly notes?: string | undefined;
+      }[];
+      readonly taskId?: string | undefined;
+      readonly saveAsDecision?: boolean | undefined;
+    },
+  ): Promise<GrillAnswerResultView>;
+  teamworkPreview(discordGuildId: string, externalUserId: string): Promise<TeamworkPreviewView>;
+  learningInsights(discordGuildId: string, externalUserId: string): Promise<LearningInsightsView>;
+  learningRecord(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly title: string;
+      readonly lesson: string;
+      readonly taskId?: string | undefined;
+    },
+  ): Promise<LearningRecordResultView>;
+  boostTask(discordGuildId: string, externalUserId: string, taskId: string): Promise<BoostTaskView>;
+  boostUnblock(discordGuildId: string, externalUserId: string): Promise<BoostUnblockView>;
+  boostSuggest(discordGuildId: string, externalUserId: string): Promise<BoostSuggestView>;
 }
+
+export interface GoalStatusView {
+  readonly projectId: string;
+  readonly name: string;
+  readonly progress: {
+    readonly goalStatement: string;
+    readonly totalTasks: number;
+    readonly completedTasks: number;
+    readonly percentage: number;
+    readonly mustHaveTasks: number;
+    readonly completedMustHaveTasks: number;
+    readonly mustHavePercentage: number;
+    readonly targetDate?: string | undefined;
+    readonly primaryMilestone?: string | undefined;
+    readonly scopeCeiling?: string | undefined;
+    readonly unalignedTasks: readonly {
+      readonly id: string;
+      readonly title: string;
+      readonly reason: string;
+    }[];
+  };
+}
+
+export interface BrowserRepoView {
+  readonly projectId: string;
+  readonly githubRepository: string | null;
+  readonly activities: readonly {
+    readonly kind: string;
+    readonly externalId: string;
+    readonly branch: string | null;
+    readonly url: string | null;
+    readonly occurredAt: string;
+  }[];
+}
+
+export interface BrowserDocView {
+  readonly url: string;
+  readonly title: string;
+  readonly text: string;
+  readonly headings: readonly string[];
+  readonly links: readonly string[];
+  readonly fetchedAt: string;
+}
+
+export interface BrowserSearchView {
+  readonly query: string;
+  readonly results: readonly {
+    readonly sourceKind: string;
+    readonly title: string;
+    readonly snippet: string;
+    readonly score: number;
+    readonly date: string;
+  }[];
+}
+
+export interface GrillQuestionnaireView {
+  readonly topic: string;
+  readonly taskId?: string | undefined;
+  readonly questions: readonly {
+    readonly pillar: string;
+    readonly question: string;
+    readonly tradeoff: string;
+    readonly options: readonly {
+      readonly key: string;
+      readonly label: string;
+      readonly pros: string;
+      readonly cons: string;
+    }[];
+    readonly recommendedOptionKey: string;
+  }[];
+}
+
+export interface GrillAnswerResultView {
+  readonly draft: {
+    readonly title: string;
+    readonly description: string;
+    readonly outcome: string;
+    readonly context: string;
+    readonly rationale: string;
+    readonly alternatives: readonly string[];
+    readonly type: string;
+  };
+  readonly decisionId?: string | undefined;
+}
+
+export interface TeamworkPreviewView {
+  readonly totalMembers: number;
+  readonly overloadedMembersCount: number;
+  readonly members: readonly {
+    readonly memberId: string;
+    readonly displayName: string;
+    readonly roles: readonly string[];
+    readonly assignedTasksCount: number;
+    readonly activeTasksCount: number;
+    readonly estimatedHoursRemaining: number;
+    readonly hoursPerWeek: number;
+    readonly workloadRatio: number;
+    readonly loadCategory: "BALANCED" | "OVERLOADED" | "AVAILABLE";
+    readonly blockedTasksCount: number;
+    readonly aiTools: readonly string[];
+  }[];
+  readonly handoffs: readonly {
+    readonly waitingMemberId: string;
+    readonly waitingMemberName: string;
+    readonly blockedTaskId: string;
+    readonly blockedTaskTitle: string;
+    readonly blockingMemberId: string;
+    readonly blockingMemberName: string;
+    readonly dependencyTaskId: string;
+    readonly dependencyTaskTitle: string;
+  }[];
+  readonly bottleneckMemberIds: readonly string[];
+}
+
+export interface LearningInsightsView {
+  readonly completedTasksCount: number;
+  readonly resolvedBlockersCount: number;
+  readonly averageEffortHours: number;
+  readonly primaryBlockerSource: string;
+  readonly insights: readonly {
+    readonly category: string;
+    readonly title: string;
+    readonly observation: string;
+    readonly recommendation: string;
+  }[];
+}
+
+export interface LearningRecordResultView {
+  readonly id: string;
+  readonly title: string;
+  readonly lesson: string;
+}
+
+export interface BoostTaskView {
+  readonly taskId: string;
+  readonly title: string;
+  readonly executionBlueprint: readonly string[];
+  readonly verificationChecklist: readonly string[];
+  readonly aiPromptTemplate: string;
+}
+
+export type BoostUnblockView = readonly {
+  readonly blockerId: string;
+  readonly description: string;
+  readonly severity: string;
+  readonly tacticalSteps: readonly string[];
+  readonly estimatedTimeSavedHours: number;
+}[];
+
+export type BoostSuggestView = readonly {
+  readonly type: string;
+  readonly description: string;
+  readonly affectedTaskIds: readonly string[];
+}[];
 
 export class DirectorApiError extends Error {
   readonly status: number;
@@ -450,5 +655,133 @@ export class HttpDirectorApiClient implements DiscordDirectorApi {
         body: JSON.stringify({ externalUserId }),
       },
     );
+  }
+
+  goalStatus(discordGuildId: string, externalUserId: string): Promise<GoalStatusView> {
+    const query = new URLSearchParams({ discordGuildId, externalUserId });
+    return this.#request(`/v1/goal?${query.toString()}`);
+  }
+
+  updateGoal(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly statement?: string | undefined;
+      readonly targetOutcome?: string | undefined;
+      readonly successCriteria?: readonly string[] | undefined;
+    },
+  ): Promise<GoalStatusView> {
+    return this.#request("/v1/goal", {
+      method: "PUT",
+      body: JSON.stringify({ discordGuildId, externalUserId, ...input }),
+    });
+  }
+
+  browserRepo(discordGuildId: string, externalUserId: string): Promise<BrowserRepoView> {
+    const query = new URLSearchParams({ discordGuildId, externalUserId });
+    return this.#request(`/v1/browser/repo?${query.toString()}`);
+  }
+
+  browserDoc(discordGuildId: string, externalUserId: string, url: string): Promise<BrowserDocView> {
+    return this.#request("/v1/browser/doc", {
+      method: "POST",
+      body: JSON.stringify({ discordGuildId, externalUserId, url }),
+    });
+  }
+
+  browserSearch(
+    discordGuildId: string,
+    externalUserId: string,
+    query: string,
+  ): Promise<BrowserSearchView> {
+    const params = new URLSearchParams({ discordGuildId, externalUserId, query });
+    return this.#request(`/v1/browser/search?${params.toString()}`);
+  }
+
+  grillStart(
+    discordGuildId: string,
+    externalUserId: string,
+    topic: string,
+    taskId?: string,
+  ): Promise<GrillQuestionnaireView> {
+    return this.#request("/v1/grill-me/start", {
+      method: "POST",
+      body: JSON.stringify({
+        discordGuildId,
+        externalUserId,
+        topic,
+        ...(taskId === undefined ? {} : { taskId }),
+      }),
+    });
+  }
+
+  grillAnswer(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly topic: string;
+      readonly answers: readonly {
+        readonly question: string;
+        readonly selectedOptionKey: string;
+        readonly notes?: string | undefined;
+      }[];
+      readonly taskId?: string | undefined;
+      readonly saveAsDecision?: boolean | undefined;
+    },
+  ): Promise<GrillAnswerResultView> {
+    return this.#request("/v1/grill-me/answer", {
+      method: "POST",
+      body: JSON.stringify({ discordGuildId, externalUserId, ...input }),
+    });
+  }
+
+  teamworkPreview(discordGuildId: string, externalUserId: string): Promise<TeamworkPreviewView> {
+    const query = new URLSearchParams({ discordGuildId, externalUserId });
+    return this.#request(`/v1/teamwork-preview?${query.toString()}`);
+  }
+
+  learningInsights(discordGuildId: string, externalUserId: string): Promise<LearningInsightsView> {
+    const query = new URLSearchParams({ discordGuildId, externalUserId });
+    return this.#request(`/v1/learning/insights?${query.toString()}`);
+  }
+
+  learningRecord(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly title: string;
+      readonly lesson: string;
+      readonly taskId?: string | undefined;
+    },
+  ): Promise<LearningRecordResultView> {
+    return this.#request("/v1/learning/record", {
+      method: "POST",
+      body: JSON.stringify({ discordGuildId, externalUserId, ...input }),
+    });
+  }
+
+  boostTask(
+    discordGuildId: string,
+    externalUserId: string,
+    taskId: string,
+  ): Promise<BoostTaskView> {
+    return this.#request("/v1/boost/task", {
+      method: "POST",
+      body: JSON.stringify({ discordGuildId, externalUserId, taskId }),
+    });
+  }
+
+  boostUnblock(discordGuildId: string, externalUserId: string): Promise<BoostUnblockView> {
+    return this.#request("/v1/boost/unblock", {
+      method: "POST",
+      body: JSON.stringify({ discordGuildId, externalUserId }),
+    });
+  }
+
+  boostSuggest(discordGuildId: string, externalUserId: string): Promise<BoostSuggestView> {
+    return this.#request("/v1/boost/suggest", {
+      method: "POST",
+      body: JSON.stringify({ discordGuildId, externalUserId }),
+    });
   }
 }

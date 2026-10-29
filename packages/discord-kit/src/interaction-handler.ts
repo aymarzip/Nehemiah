@@ -589,6 +589,396 @@ async function handleBlockerCommand(
   });
 }
 
+async function handleGoalCommand(
+  interaction: ChatInputCommandInteraction,
+  options: InteractionHandlerOptions,
+): Promise<void> {
+  const guildId = requireGuild(interaction);
+  const subcommand = interaction.options.getSubcommand();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (subcommand === "set") {
+    const statement = interaction.options.getString("statement", true);
+    const outcome = interaction.options.getString("outcome") ?? undefined;
+    const criteriaRaw = interaction.options.getString("criteria");
+    const successCriteria = criteriaRaw !== null ? parseList(criteriaRaw) : undefined;
+    const result = await options.api.updateGoal(guildId, interaction.user.id, {
+      statement,
+      targetOutcome: outcome,
+      successCriteria,
+    });
+    const embed = new EmbedBuilder()
+      .setTitle(`Goal Updated · ${escapeMarkdown(result.name)}`)
+      .setDescription(`**Goal:** ${escapeMarkdown(result.progress.goalStatement)}`)
+      .addFields(
+        {
+          name: "Progress",
+          value: `Must-Have: ${result.progress.completedMustHaveTasks}/${result.progress.mustHaveTasks} (${result.progress.mustHavePercentage}%)\nTotal: ${result.progress.completedTasks}/${result.progress.totalTasks} (${result.progress.percentage}%)`,
+          inline: true,
+        },
+        {
+          name: "Details",
+          value: `Milestone: ${escapeMarkdown(result.progress.primaryMilestone ?? "None")}\nTarget: ${result.progress.targetDate ?? "Not set"}\nCeiling: ${escapeMarkdown(result.progress.scopeCeiling ?? "None")}`,
+          inline: true,
+        },
+      );
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  const result = await options.api.goalStatus(guildId, interaction.user.id);
+  const embed = new EmbedBuilder()
+    .setTitle(`Goal · ${escapeMarkdown(result.name)}`)
+    .setDescription(`**Goal:** ${escapeMarkdown(result.progress.goalStatement)}`)
+    .addFields(
+      {
+        name: "Progress",
+        value: `Must-Have: ${result.progress.completedMustHaveTasks}/${result.progress.mustHaveTasks} (${result.progress.mustHavePercentage}%)\nTotal: ${result.progress.completedTasks}/${result.progress.totalTasks} (${result.progress.percentage}%)`,
+        inline: true,
+      },
+      {
+        name: "Details",
+        value: `Milestone: ${escapeMarkdown(result.progress.primaryMilestone ?? "None")}\nTarget: ${result.progress.targetDate ?? "Not set"}\nCeiling: ${escapeMarkdown(result.progress.scopeCeiling ?? "None")}`,
+        inline: true,
+      },
+      ...(result.progress.unalignedTasks.length === 0
+        ? []
+        : [
+            {
+              name: "Unaligned Tasks",
+              value: result.progress.unalignedTasks
+                .slice(0, 5)
+                .map((t) => `• ${escapeMarkdown(t.title)}: ${escapeMarkdown(t.reason)}`)
+                .join("\n")
+                .slice(0, 1_024),
+            },
+          ]),
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleBrowserCommand(
+  interaction: ChatInputCommandInteraction,
+  options: InteractionHandlerOptions,
+): Promise<void> {
+  const guildId = requireGuild(interaction);
+  const subcommand = interaction.options.getSubcommand();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (subcommand === "repo") {
+    const repo = await options.api.browserRepo(guildId, interaction.user.id);
+    if (!repo.githubRepository) {
+      await interaction.editReply({
+        content: "No GitHub repository connected to this project.",
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+    const embed = new EmbedBuilder()
+      .setTitle(`GitHub Repository · ${escapeMarkdown(repo.githubRepository)}`)
+      .setDescription(
+        repo.activities.length === 0
+          ? "No recent GitHub activity recorded."
+          : repo.activities
+              .slice(0, 10)
+              .map(
+                (act) =>
+                  `• [${act.kind}] ${act.branch ? `(${escapeMarkdown(act.branch)}) ` : ""}${escapeMarkdown(act.externalId)} at ${act.occurredAt}`,
+              )
+              .join("\n")
+              .slice(0, 4_000),
+      );
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  if (subcommand === "doc") {
+    const url = interaction.options.getString("url", true);
+    const doc = await options.api.browserDoc(guildId, interaction.user.id, url);
+    const embed = new EmbedBuilder()
+      .setTitle(`Doc · ${escapeMarkdown(doc.title || doc.url)}`)
+      .setDescription(`**URL:** ${doc.url}\n\n${escapeMarkdown(doc.text).slice(0, 1_500)}`)
+      .addFields(
+        {
+          name: "Headings",
+          value:
+            doc.headings
+              .slice(0, 5)
+              .map((h) => escapeMarkdown(h))
+              .join(", ")
+              .slice(0, 1_024) || "None",
+        },
+        {
+          name: "Links",
+          value: `${doc.links.length} discovered link(s)`,
+        },
+      );
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  const query = interaction.options.getString("query", true);
+  const search = await options.api.browserSearch(guildId, interaction.user.id, query);
+  const embed = new EmbedBuilder()
+    .setTitle(`Knowledge Search · "${escapeMarkdown(search.query)}"`)
+    .setDescription(`${search.results.length} result(s) found`)
+    .addFields(
+      search.results.slice(0, 5).map((res) => ({
+        name: `[${res.sourceKind}] ${escapeMarkdown(res.title)} (score: ${res.score})`,
+        value: escapeMarkdown(res.snippet).slice(0, 250) || "No snippet",
+      })),
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleGrillMeCommand(
+  interaction: ChatInputCommandInteraction,
+  options: InteractionHandlerOptions,
+): Promise<void> {
+  const guildId = requireGuild(interaction);
+  const subcommand = interaction.options.getSubcommand();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (subcommand === "start") {
+    const topic = interaction.options.getString("topic", true);
+    const taskId = interaction.options.getString("task_id") ?? undefined;
+    const questionnaire = await options.api.grillStart(guildId, interaction.user.id, topic, taskId);
+    const embed = new EmbedBuilder()
+      .setTitle(`Technical Interrogation · ${escapeMarkdown(questionnaire.topic)}`)
+      .setDescription(`${questionnaire.questions.length} architectural question(s) generated:`)
+      .addFields(
+        questionnaire.questions.slice(0, 6).map((q) => ({
+          name: `[${q.pillar}] ${escapeMarkdown(q.question)}`,
+          value: q.options
+            .map(
+              (o) =>
+                `• **${o.key}**: ${escapeMarkdown(o.label)}${q.recommendedOptionKey === o.key ? " ⭐ Recommended" : ""}\n  _${escapeMarkdown(o.pros)}_`,
+            )
+            .join("\n")
+            .slice(0, 1_024),
+        })),
+      );
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  const topic = interaction.options.getString("topic", true);
+  const question = interaction.options.getString("question", true);
+  const optionKey = interaction.options.getString("option", true);
+  const notes = interaction.options.getString("notes") ?? undefined;
+  const taskId = interaction.options.getString("task_id") ?? undefined;
+  const result = await options.api.grillAnswer(guildId, interaction.user.id, {
+    topic,
+    answers: [{ question, selectedOptionKey: optionKey, notes }],
+    taskId,
+    saveAsDecision: true,
+  });
+
+  const embed = new EmbedBuilder()
+    .setTitle(`Architectural Decision · ${escapeMarkdown(result.draft.title)}`)
+    .setDescription(
+      `Recorded decision${result.decisionId ? ` \`${result.decisionId}\`` : ""}: ${escapeMarkdown(result.draft.description)}`,
+    )
+    .addFields(
+      {
+        name: "Outcome",
+        value: escapeMarkdown(result.draft.outcome).slice(0, 1_024),
+      },
+      {
+        name: "Rationale",
+        value: escapeMarkdown(result.draft.rationale).slice(0, 1_024),
+      },
+      {
+        name: "Context",
+        value: escapeMarkdown(result.draft.context).slice(0, 1_024),
+      },
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleTeamworkPreviewCommand(
+  interaction: ChatInputCommandInteraction,
+  options: InteractionHandlerOptions,
+): Promise<void> {
+  const guildId = requireGuild(interaction);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const preview = await options.api.teamworkPreview(guildId, interaction.user.id);
+  const embed = new EmbedBuilder()
+    .setTitle("Teamwork Preview · Workload & Bottlenecks")
+    .setDescription(
+      `Team of ${preview.totalMembers} member(s) (${preview.overloadedMembersCount} overloaded)`,
+    )
+    .addFields(
+      {
+        name: "Member Workloads",
+        value:
+          preview.members.length === 0
+            ? "No members assigned"
+            : preview.members
+                .map(
+                  (m) =>
+                    `• **${escapeMarkdown(m.displayName)}** (${m.roles.join(", ")}): ${m.assignedTasksCount} task(s), ~${m.estimatedHoursRemaining}h remaining (${m.loadCategory})`,
+                )
+                .join("\n")
+                .slice(0, 1_024),
+      },
+      {
+        name: "Critical Handoffs",
+        value:
+          preview.handoffs.length === 0
+            ? "No cross-member handoffs"
+            : preview.handoffs
+                .slice(0, 5)
+                .map(
+                  (h) =>
+                    `• ${escapeMarkdown(h.blockingMemberName)} → ${escapeMarkdown(h.waitingMemberName)} (Tasks \`${h.dependencyTaskId}\` → \`${h.blockedTaskId}\`)`,
+                )
+                .join("\n")
+                .slice(0, 1_024),
+      },
+      {
+        name: "Bottleneck Members",
+        value:
+          preview.bottleneckMemberIds.length === 0
+            ? "No bottleneck members detected"
+            : preview.bottleneckMemberIds
+                .map((id) => `⚠️ Member \`${id}\``)
+                .join("\n")
+                .slice(0, 1_024),
+      },
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleLearnCommand(
+  interaction: ChatInputCommandInteraction,
+  options: InteractionHandlerOptions,
+): Promise<void> {
+  const guildId = requireGuild(interaction);
+  const subcommand = interaction.options.getSubcommand();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (subcommand === "record") {
+    const title = interaction.options.getString("title", true);
+    const lesson = interaction.options.getString("lesson", true);
+    const taskId = interaction.options.getString("task_id") ?? undefined;
+    const res = await options.api.learningRecord(guildId, interaction.user.id, {
+      title,
+      lesson,
+      taskId,
+    });
+    await interaction.editReply({
+      content: `Engineering lesson recorded: **${escapeMarkdown(res.title)}** (\`${res.id}\`)`,
+      allowedMentions: { parse: [] },
+    });
+    return;
+  }
+
+  const report = await options.api.learningInsights(guildId, interaction.user.id);
+  const embed = new EmbedBuilder()
+    .setTitle("Retrospective Learning Insights")
+    .setDescription(
+      `Analyzed project execution: ${report.completedTasksCount} completed task(s), ${report.resolvedBlockersCount} resolved blocker(s).`,
+    )
+    .addFields(
+      {
+        name: "Velocity",
+        value: `Avg effort: ${report.averageEffortHours}h / task\nPrimary blocker source: ${report.primaryBlockerSource}`,
+        inline: true,
+      },
+      {
+        name: "Insights & Recommendations",
+        value:
+          report.insights.length === 0
+            ? "No specific learning patterns identified yet."
+            : report.insights
+                .slice(0, 5)
+                .map(
+                  (i) =>
+                    `• [${i.category}] **${escapeMarkdown(i.title)}**\n  _${escapeMarkdown(i.observation)}_\n  👉 ${escapeMarkdown(i.recommendation)}`,
+                )
+                .join("\n\n")
+                .slice(0, 1_024),
+      },
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleBoostCommand(
+  interaction: ChatInputCommandInteraction,
+  options: InteractionHandlerOptions,
+): Promise<void> {
+  const guildId = requireGuild(interaction);
+  const subcommand = interaction.options.getSubcommand();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (subcommand === "task") {
+    const taskId = interaction.options.getString("task_id", true);
+    const boost = await options.api.boostTask(guildId, interaction.user.id, taskId);
+    const embed = new EmbedBuilder()
+      .setTitle(`Task Boost · ${escapeMarkdown(boost.title)}`)
+      .setDescription(`Execution accelerator for task \`${boost.taskId}\``)
+      .addFields(
+        {
+          name: "Execution Blueprint",
+          value:
+            boost.executionBlueprint
+              .map((s) => `• ${escapeMarkdown(s)}`)
+              .join("\n")
+              .slice(0, 1_024) || "None",
+        },
+        {
+          name: "Verification Checklist",
+          value:
+            boost.verificationChecklist
+              .map((s) => `☐ ${escapeMarkdown(s)}`)
+              .join("\n")
+              .slice(0, 1_024) || "None",
+        },
+        {
+          name: "AI Prompt Template",
+          value: `\`\`\`\n${boost.aiPromptTemplate.slice(0, 950)}\n\`\`\``,
+        },
+      );
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  if (subcommand === "unblock") {
+    const plans = await options.api.boostUnblock(guildId, interaction.user.id);
+    const embed = new EmbedBuilder()
+      .setTitle("Tactical Unblocking Plans")
+      .setDescription(`Analyzed ${plans.length} blocker(s).`)
+      .addFields(
+        plans.length === 0
+          ? [{ name: "Status", value: "No active blockers require tactical unblocking." }]
+          : plans.slice(0, 5).map((plan) => ({
+              name: `[${plan.severity}] ${escapeMarkdown(plan.description)} (Save ~${plan.estimatedTimeSavedHours}h)`,
+              value: plan.tacticalSteps
+                .map((s) => `• ${escapeMarkdown(s)}`)
+                .join("\n")
+                .slice(0, 1_000),
+            })),
+      );
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  const suggestions = await options.api.boostSuggest(guildId, interaction.user.id);
+  const embed = new EmbedBuilder()
+    .setTitle("Scope & Execution Optimizations")
+    .setDescription(`${suggestions.length} optimization recommendation(s) generated.`)
+    .addFields(
+      suggestions.length === 0
+        ? [{ name: "Status", value: "Task graph is optimal; no adjustments recommended." }]
+        : suggestions.slice(0, 5).map((s) => ({
+            name: `[${s.type}] (${s.affectedTaskIds.length} task(s) affected)`,
+            value: escapeMarkdown(s.description).slice(0, 1_000),
+          })),
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
 async function handleMissionControlButton(
   interaction: ButtonInteraction,
   options: InteractionHandlerOptions,
@@ -725,6 +1115,24 @@ export function createInteractionHandler(options: InteractionHandlerOptions) {
             return;
           case "blocker":
             await handleBlockerCommand(interaction, options);
+            return;
+          case "goal":
+            await handleGoalCommand(interaction, options);
+            return;
+          case "browser":
+            await handleBrowserCommand(interaction, options);
+            return;
+          case "grill-me":
+            await handleGrillMeCommand(interaction, options);
+            return;
+          case "teamwork-preview":
+            await handleTeamworkPreviewCommand(interaction, options);
+            return;
+          case "learn":
+            await handleLearnCommand(interaction, options);
+            return;
+          case "boost":
+            await handleBoostCommand(interaction, options);
             return;
           default:
             return;

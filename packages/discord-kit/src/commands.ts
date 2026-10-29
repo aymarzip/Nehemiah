@@ -199,7 +199,188 @@ export function buildDiscordCommands(): readonly RESTPostAPIChatInputApplication
         ),
     );
 
-  return [project, team, task, producer, blocker].map((command) => command.toJSON());
+  const goal = new SlashCommandBuilder()
+    .setName("goal")
+    .setDescription("Inspect and update project shipping goal and alignment")
+    .addSubcommand((command) =>
+      command
+        .setName("status")
+        .setDescription("Show current goal tracking, progress, and alignment"),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("set")
+        .setDescription("Update project shipping goal")
+        .addStringOption((option) =>
+          option
+            .setName("statement")
+            .setDescription("New goal statement")
+            .setRequired(true)
+            .setMaxLength(2_000),
+        )
+        .addStringOption((option) =>
+          option.setName("outcome").setDescription("Target outcome").setMaxLength(2_000),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("criteria")
+            .setDescription("Comma-separated success criteria")
+            .setMaxLength(1_000),
+        ),
+    );
+
+  const browser = new SlashCommandBuilder()
+    .setName("browser")
+    .setDescription("Safe project research and document inspection")
+    .addSubcommand((command) =>
+      command.setName("repo").setDescription("Inspect connected repository activity"),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("doc")
+        .setDescription("Fetch and summarize external documentation safely")
+        .addStringOption((option) =>
+          option.setName("url").setDescription("HTTP(S) URL to fetch").setRequired(true),
+        ),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("search")
+        .setDescription("Search project decisions, memory, and code activities")
+        .addStringOption((option) =>
+          option
+            .setName("query")
+            .setDescription("Search terms")
+            .setRequired(true)
+            .setMaxLength(500),
+        ),
+    );
+
+  const grillMe = new SlashCommandBuilder()
+    .setName("grill-me")
+    .setDescription("Technical interrogation on architecture and trade-offs")
+    .addSubcommand((command) =>
+      command
+        .setName("start")
+        .setDescription("Start technical interrogation on an architectural topic")
+        .addStringOption((option) =>
+          option
+            .setName("topic")
+            .setDescription("Architectural topic")
+            .setRequired(true)
+            .setMaxLength(500),
+        )
+        .addStringOption((option) =>
+          option.setName("task_id").setDescription("Optional task ID to associate"),
+        ),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("answer")
+        .setDescription("Record choice for an interrogation question")
+        .addStringOption((option) =>
+          option
+            .setName("topic")
+            .setDescription("Architectural topic")
+            .setRequired(true)
+            .setMaxLength(500),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("question")
+            .setDescription("Interrogation question or key")
+            .setRequired(true)
+            .setMaxLength(500),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("option")
+            .setDescription("Selected option key (A, B, C)")
+            .setRequired(true)
+            .setMaxLength(100),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("notes")
+            .setDescription("Additional rationale or notes")
+            .setMaxLength(1_000),
+        )
+        .addStringOption((option) => option.setName("task_id").setDescription("Optional task ID")),
+    );
+
+  const teamworkPreview = new SlashCommandBuilder()
+    .setName("teamwork-preview")
+    .setDescription("Preview team workload distribution and critical handoffs")
+    .addSubcommand((command) =>
+      command
+        .setName("overview")
+        .setDescription("Show workload, handoffs, and bottlenecks across team"),
+    );
+
+  const learn = new SlashCommandBuilder()
+    .setName("learn")
+    .setDescription("Project learning engine and retrospective insights")
+    .addSubcommand((command) =>
+      command
+        .setName("insights")
+        .setDescription("Show retrospective insights, velocity, and blocker root causes"),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("record")
+        .setDescription("Record an engineering lesson or architectural takeaway")
+        .addStringOption((option) =>
+          option
+            .setName("title")
+            .setDescription("Lesson title")
+            .setRequired(true)
+            .setMaxLength(300),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("lesson")
+            .setDescription("Detailed takeaway or lesson")
+            .setRequired(true)
+            .setMaxLength(4_000),
+        )
+        .addStringOption((option) => option.setName("task_id").setDescription("Optional task ID")),
+    );
+
+  const boost = new SlashCommandBuilder()
+    .setName("boost")
+    .setDescription("AI task execution blueprint and unblocking accelerator")
+    .addSubcommand((command) =>
+      command
+        .setName("task")
+        .setDescription("Generate execution blueprint, checklist, and prompt for a task")
+        .addStringOption((option) =>
+          option.setName("task_id").setDescription("Task identifier").setRequired(true),
+        ),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("unblock")
+        .setDescription("Analyze open blockers and produce tactical unblocking steps"),
+    )
+    .addSubcommand((command) =>
+      command
+        .setName("suggest")
+        .setDescription("Suggest scope deferrals and parallelization opportunities"),
+    );
+
+  return [
+    project,
+    team,
+    task,
+    producer,
+    blocker,
+    goal,
+    browser,
+    grillMe,
+    teamworkPreview,
+    learn,
+    boost,
+  ].map((command) => command.toJSON());
 }
 
 export { PermissionFlagsBits };

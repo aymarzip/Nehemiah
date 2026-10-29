@@ -24,6 +24,13 @@ import {
   TaskDependency,
   TaskGraph,
   TeamMember,
+  BoostEngine,
+  GoalService,
+  LearningEngine,
+  ProjectBrowserService,
+  TechnicalGrillEngine,
+  TeamworkPreviewService,
+  type GrillAnswerInput,
   type ProposedTask,
   type TaskEvidenceKind,
 } from "@nehemiah/core";
@@ -329,6 +336,12 @@ export class Phase2ApplicationService {
   readonly #decomposition = new TaskDecompositionValidator();
   readonly #github = new GitHubIntelligenceService();
   readonly #checkpoints = new SmartCheckpointService();
+  readonly #goalService = new GoalService();
+  readonly #browserService = new ProjectBrowserService();
+  readonly #grillEngine = new TechnicalGrillEngine();
+  readonly #teamworkService = new TeamworkPreviewService();
+  readonly #learningEngine = new LearningEngine();
+  readonly #boostEngine = new BoostEngine();
   readonly #onLlm?: ((metadata: Readonly<Record<string, unknown>>) => void) | undefined;
   readonly #options: Phase2ServiceOptions;
 
@@ -1591,5 +1604,209 @@ export class Phase2ApplicationService {
         "This operation requires a project owner or producer role.",
       );
     return { project, member };
+  }
+
+  async goalStatus(discordGuildId: string, externalUserId: string, now = new Date()) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const state = await this.#state(project, now);
+    const progress = this.#goalService.computeProgress(coreProject(project), state.tasks);
+    return {
+      projectId: project.id,
+      name: project.name,
+      progress,
+    };
+  }
+
+  async updateGoal(
+    discordGuildId: string,
+    externalUserId: string,
+    input: {
+      readonly statement?: string | undefined;
+      readonly targetOutcome?: string | undefined;
+      readonly successCriteria?: readonly string[] | undefined;
+    },
+    now = new Date(),
+  ) {
+    const { project, member } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    if (!manager(member)) {
+      throw new DirectorServiceError(
+        403,
+        "FORBIDDEN",
+        "Only project owners or producers can update the goal.",
+      );
+    }
+    const revision = await this.proposeVision(
+      project.id,
+      externalUserId,
+      {
+        statement: input.statement ?? project.vision,
+        problem: project.visionDetails.problem,
+        targetOutcome: input.targetOutcome ?? project.visionDetails.targetOutcome,
+        coreExperience: project.visionDetails.coreExperience,
+        mustHaveScope: project.visionDetails.mustHaveScope,
+        shouldHaveScope: project.visionDetails.shouldHaveScope,
+        niceToHaveScope: project.visionDetails.niceToHaveScope,
+        excludedScope: project.visionDetails.excludedScope,
+        constraints: project.constraints,
+        successCriteria: input.successCriteria ?? project.successCriteria,
+      },
+      now,
+    );
+    await this.approveVision(
+      project.id,
+      revision.id,
+      externalUserId,
+      "Direct goal update via goal command",
+      now,
+    );
+    return this.goalStatus(discordGuildId, externalUserId, now);
+  }
+
+  async browserRepo(discordGuildId: string, externalUserId: string) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const activities = await this.#store.listGitHubActivity(project.id, 20);
+    return {
+      projectId: project.id,
+      githubRepository: project.githubRepository,
+      activities: activities.map((act) => ({
+        kind: act.kind,
+        externalId: act.externalId,
+        branch: act.branch,
+        url: act.url,
+        occurredAt: act.occurredAt.toISOString(),
+      })),
+    };
+  }
+
+  async browserDoc(discordGuildId: string, externalUserId: string, url: string) {
+    await this.#authorizeGuild(discordGuildId, externalUserId);
+    return this.#browserService.fetchDoc(url);
+  }
+
+  async browserSearch(discordGuildId: string, externalUserId: string, query: string) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const [memory, decisions, activities] = await Promise.all([
+      this.#store.listMemory(project.id, undefined, 50),
+      this.#store.listDecisions(project.id, 50),
+      this.#store.listGitHubActivity(project.id, 50),
+    ]);
+    const results = this.#browserService.searchKnowledge(query, memory, decisions, activities);
+    return { query, results };
+  }
+
+  async grillStart(discordGuildId: string, externalUserId: string, topic: string, taskId?: string) {
+    await this.#authorizeGuild(discordGuildId, externalUserId);
+    return this.#grillEngine.generateQuestions(topic, taskId);
+  }
+
+  async grillAnswer(
+    discordGuildId: string,
+    externalUserId: string,
+    topic: string,
+    answers: readonly GrillAnswerInput[],
+    taskId?: string,
+    saveAsDecision = true,
+    now = new Date(),
+  ) {
+    const { project, member } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const draft = this.#grillEngine.compileDecision(topic, answers, taskId);
+    let decisionId: string | undefined;
+    if (saveAsDecision) {
+      const decisionRecord: DecisionRecord = {
+        id: randomUUID(),
+        projectId: project.id,
+        type: draft.type,
+        title: draft.title,
+        description: draft.description,
+        context: draft.context,
+        rationale: draft.rationale,
+        outcome: draft.outcome,
+        alternatives: draft.alternatives,
+        affectedTaskIds: taskId ? [taskId] : [],
+        affectedComponents: [],
+        status: manager(member) ? "ACCEPTED" : "PROPOSED",
+        authorMemberId: member.id,
+        ...(manager(member) ? { approvedByMemberId: member.id, approvedAt: now } : {}),
+        createdAt: now,
+      };
+      await this.#store.addDecision(decisionRecord);
+      decisionId = decisionRecord.id;
+    }
+    return { draft, decisionId };
+  }
+
+  async teamworkPreview(discordGuildId: string, externalUserId: string, now = new Date()) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const [members, state] = await Promise.all([
+      this.#store.listTeamMembers(project.workspaceId),
+      this.#state(project, now),
+    ]);
+    const coreMembers = members.map((m) => coreMember(m, project.id));
+    return this.#teamworkService.generate(
+      coreMembers,
+      state.tasks,
+      state.dependencies,
+      state.blockers,
+    );
+  }
+
+  async learningInsights(discordGuildId: string, externalUserId: string, now = new Date()) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const state = await this.#state(project, now);
+    return this.#learningEngine.analyze(state.tasks, state.blockers);
+  }
+
+  async learningRecord(
+    discordGuildId: string,
+    externalUserId: string,
+    title: string,
+    lesson: string,
+    taskId?: string,
+    now = new Date(),
+  ) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const id = randomUUID();
+    await this.#store.addMemoryEntry({
+      id,
+      projectId: project.id,
+      category: "LESSON",
+      title: title.trim(),
+      content: lesson.trim(),
+      confidence: 1,
+      createdAt: now,
+    });
+    return { id, title, lesson };
+  }
+
+  async boostTask(
+    discordGuildId: string,
+    externalUserId: string,
+    taskId: string,
+    now = new Date(),
+  ) {
+    const { project, member } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const state = await this.#state(project, now);
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (task === undefined) {
+      throw new DirectorServiceError(404, "TASK_NOT_FOUND", "Task not found in project.");
+    }
+    const dependencies = state.dependencies
+      .filter((d) => d.dependantTaskId === taskId)
+      .map((d) => state.tasks.find((t) => t.id === d.dependencyTaskId))
+      .filter((t): t is Task => t !== undefined);
+    const coreM = coreMember(member, project.id);
+    return this.#boostEngine.boostTask(task, coreProject(project), dependencies, coreM);
+  }
+
+  async boostUnblock(discordGuildId: string, externalUserId: string, now = new Date()) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const state = await this.#state(project, now);
+    return this.#boostEngine.analyzeUnblocking(state.blockers, state.tasks);
+  }
+
+  async boostSuggest(discordGuildId: string, externalUserId: string, now = new Date()) {
+    const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
+    const state = await this.#state(project, now);
+    return this.#boostEngine.suggestOptimizations(state.tasks, state.dependencies);
   }
 }

@@ -89,6 +89,9 @@ describe("configuration", () => {
     expect(config.ai.decompositionMaxOutputTokens).toBe(2500);
     expect(config.ai.maxContextMemoryItems).toBe(40);
     expect(config.ai.maxContextSignals).toBe(25);
+    expect(config.ai.maxGraphTasksInContext).toBe(40);
+    expect(config.ai.enablePromptCompacting).toBe(true);
+    expect(config.ai.maxPromptChars).toBe(24000);
     expect(config.ai.temperature).toBe(0.7);
     expect(config.ai.timeoutMs).toBe(25000);
     if (config.storage.driver === "postgres") {

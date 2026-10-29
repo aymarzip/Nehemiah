@@ -785,4 +785,178 @@ describe("Phase 1 HTTP vertical slice", () => {
       await app.close();
     }
   });
+
+  it("handles /goal, /browser, /grill-me, /teamwork-preview, /learn, and /boost endpoints", async () => {
+    const config = testConfig();
+    const app = buildApp({
+      config,
+      store: new InMemoryProjectStore(),
+      llm: createConfiguredLlmRegistry(config.ai),
+      logger: logger(),
+    });
+    try {
+      await app.inject({
+        method: "POST",
+        url: "/v1/projects/setup",
+        headers: internalHeaders,
+        payload: setupPayload,
+      });
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/team/join",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "developer-user",
+          displayName: "Developer",
+          roles: ["DEVELOPER"],
+          skills: [{ name: "TypeScript", level: 4 }],
+          hoursPerWeek: 30,
+          timezone: "UTC",
+          aiTools: ["Cursor"],
+        },
+      });
+
+      // 1. Goal endpoints
+      const goalGet = await app.inject({
+        method: "GET",
+        url: "/v1/goal?discordGuildId=guild-1&externalUserId=owner-user",
+        headers: internalHeaders,
+      });
+      expect(goalGet.statusCode).toBe(200);
+      expect(goalGet.json<{ progress: { statement: string } }>().progress.statement).toBe(
+        "Ship a small cohesive experience",
+      );
+
+      const goalPut = await app.inject({
+        method: "PUT",
+        url: "/v1/goal",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "owner-user",
+          statement: "Updated project goal statement",
+          targetOutcome: "Playable release build",
+        },
+      });
+      expect(goalPut.statusCode).toBe(200);
+      expect(goalPut.json<{ progress: { statement: string } }>().progress.statement).toBe(
+        "Updated project goal statement",
+      );
+
+      // 2. Browser endpoints
+      const browserRepo = await app.inject({
+        method: "GET",
+        url: "/v1/browser/repo?discordGuildId=guild-1&externalUserId=developer-user",
+        headers: internalHeaders,
+      });
+      expect(browserRepo.statusCode).toBe(200);
+      expect(browserRepo.json()).toMatchObject({
+        githubRepository: "team/jam-game",
+        activities: expect.any(Array),
+      });
+
+      const browserSearch = await app.inject({
+        method: "GET",
+        url: "/v1/browser/search?discordGuildId=guild-1&externalUserId=developer-user&query=game",
+        headers: internalHeaders,
+      });
+      expect(browserSearch.statusCode).toBe(200);
+      expect(browserSearch.json()).toHaveProperty("results");
+
+      // 3. Grill-me endpoints
+      const grillStart = await app.inject({
+        method: "POST",
+        url: "/v1/grill-me/start",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "developer-user",
+          topic: "State Synchronization",
+        },
+      });
+      expect(grillStart.statusCode).toBe(200);
+      const grillSession = grillStart.json<{ questions: { question: string }[] }>();
+      expect(grillSession.questions.length).toBeGreaterThan(0);
+
+      const grillAnswer = await app.inject({
+        method: "POST",
+        url: "/v1/grill-me/answer",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "owner-user",
+          topic: "State Synchronization",
+          answers: [
+            {
+              question: grillSession.questions[0]!.question,
+              selectedOptionKey: "ISOLATED_MODULE",
+              notes: "Prevents race conditions",
+            },
+          ],
+          saveAsDecision: true,
+        },
+      });
+      expect(grillAnswer.statusCode).toBe(200);
+      expect(grillAnswer.json()).toHaveProperty("decisionId");
+
+      // 4. Teamwork-preview endpoint
+      const teamwork = await app.inject({
+        method: "GET",
+        url: "/v1/teamwork-preview?discordGuildId=guild-1&externalUserId=developer-user",
+        headers: internalHeaders,
+      });
+      expect(teamwork.statusCode).toBe(200);
+      expect(teamwork.json()).toHaveProperty("members");
+      expect(teamwork.json()).toHaveProperty("handoffs");
+
+      // 5. Learning endpoints
+      const learnInsights = await app.inject({
+        method: "GET",
+        url: "/v1/learning/insights?discordGuildId=guild-1&externalUserId=developer-user",
+        headers: internalHeaders,
+      });
+      expect(learnInsights.statusCode).toBe(200);
+      expect(learnInsights.json()).toHaveProperty("insights");
+
+      const learnRecord = await app.inject({
+        method: "POST",
+        url: "/v1/learning/record",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "developer-user",
+          title: "Contract definition timing",
+          lesson: "Define schema contracts before task implementation starts.",
+        },
+      });
+      expect(learnRecord.statusCode).toBe(201);
+
+      // 6. Boost endpoints
+      const unblockRes = await app.inject({
+        method: "POST",
+        url: "/v1/boost/unblock",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "developer-user",
+        },
+      });
+      expect(unblockRes.statusCode).toBe(200);
+
+      const suggestRes = await app.inject({
+        method: "POST",
+        url: "/v1/boost/suggest",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "developer-user",
+        },
+      });
+      expect(suggestRes.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
 });
