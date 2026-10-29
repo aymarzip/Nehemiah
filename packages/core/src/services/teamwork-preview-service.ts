@@ -48,7 +48,10 @@ export class TeamworkPreviewService {
     blockers: readonly Blocker[] = [],
   ): TeamworkPreviewResult {
     const taskMap = new Map(tasks.map((t) => [t.id, t]));
-    const normalizedDeps: TaskDependency[] = dependencies.map((d) =>
+    const validDeps = dependencies.filter(
+      (d) => taskMap.has(d.dependantTaskId) && taskMap.has(d.dependencyTaskId),
+    );
+    const normalizedDeps: TaskDependency[] = validDeps.map((d) =>
       d instanceof TaskDependency
         ? d
         : new TaskDependency({
@@ -58,7 +61,9 @@ export class TeamworkPreviewService {
           }),
     );
     const graph = new TaskGraph(tasks, normalizedDeps);
-    const criticalTaskIds = new Set(graph.criticalPath({ remainingOnly: true }).taskIds);
+    const criticalTaskIds = new Set(
+      graph.hasCycle() ? [] : graph.criticalPath({ remainingOnly: true }).taskIds,
+    );
     const memberMap = new Map(members.map((m) => [m.id, m]));
 
     const openBlockedTaskIds = new Set(
@@ -72,9 +77,15 @@ export class TeamworkPreviewService {
       const active = assigned.filter((t) => !COMPLETED_TASK_STATUSES.has(t.status));
       const hoursRemaining = active.reduce((sum, t) => sum + t.estimatedEffortHours, 0);
       const capacity = member.availability.weeklyHours;
-      const ratio = capacity > 0 ? round(hoursRemaining / capacity, 2) : 0;
+      const ratio =
+        capacity > 0 ? round(hoursRemaining / capacity, 2) : hoursRemaining > 0 ? 999 : 0;
 
-      const loadCategory = ratio > 1.2 ? "OVERLOADED" : ratio < 0.5 ? "AVAILABLE" : "BALANCED";
+      const loadCategory =
+        ratio > 1.2 || (capacity === 0 && hoursRemaining > 0)
+          ? "OVERLOADED"
+          : ratio < 0.5 && capacity > 0
+            ? "AVAILABLE"
+            : "BALANCED";
 
       const blockedCount = active.filter(
         (t) => t.status === "BLOCKED" || openBlockedTaskIds.has(t.id),

@@ -253,20 +253,28 @@ export interface GoalStatusView {
   readonly name: string;
   readonly progress: {
     readonly goalStatement: string;
+    readonly statement?: string | undefined;
     readonly totalTasks: number;
     readonly completedTasks: number;
     readonly percentage: number;
+    readonly overallProgressPercent?: number | undefined;
     readonly mustHaveTasks: number;
+    readonly mustHaveTotal?: number | undefined;
     readonly completedMustHaveTasks: number;
+    readonly mustHaveCompleted?: number | undefined;
     readonly mustHavePercentage: number;
+    readonly mustHaveProgressPercent?: number | undefined;
     readonly targetDate?: string | undefined;
     readonly primaryMilestone?: string | undefined;
     readonly scopeCeiling?: string | undefined;
-    readonly unalignedTasks: readonly {
-      readonly id: string;
-      readonly title: string;
-      readonly reason: string;
-    }[];
+    readonly unalignedTasks?:
+      | readonly {
+          readonly id: string;
+          readonly title: string;
+          readonly reason: string;
+        }[]
+      | undefined;
+    readonly unalignedTaskIds?: readonly string[] | undefined;
   };
 }
 
@@ -383,7 +391,8 @@ export interface LearningRecordResultView {
 export interface BoostTaskView {
   readonly taskId: string;
   readonly title: string;
-  readonly executionBlueprint: readonly string[];
+  readonly executionBlueprint?: readonly string[] | undefined;
+  readonly executionSteps?: readonly string[] | undefined;
   readonly verificationChecklist: readonly string[];
   readonly aiPromptTemplate: string;
 }
@@ -392,14 +401,20 @@ export type BoostUnblockView = readonly {
   readonly blockerId: string;
   readonly description: string;
   readonly severity: string;
-  readonly tacticalSteps: readonly string[];
-  readonly estimatedTimeSavedHours: number;
+  readonly action?: string | undefined;
+  readonly rationale?: string | undefined;
+  readonly tacticalSteps?: readonly string[] | undefined;
+  readonly estimatedTimeSavedHours?: number | undefined;
 }[];
 
 export type BoostSuggestView = readonly {
-  readonly type: string;
-  readonly description: string;
-  readonly affectedTaskIds: readonly string[];
+  readonly title?: string | undefined;
+  readonly category?: string | undefined;
+  readonly type?: string | undefined;
+  readonly details?: string | undefined;
+  readonly description?: string | undefined;
+  readonly estimatedHoursSaved?: number | undefined;
+  readonly affectedTaskIds?: readonly string[] | undefined;
 }[];
 
 export class DirectorApiError extends Error {

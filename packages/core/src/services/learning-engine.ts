@@ -42,14 +42,14 @@ export class LearningEngine {
 
     const insights: LearningInsight[] = [];
 
-    if (completedTasks.length >= 3) {
+    if (completedTasks.length >= 1) {
       insights.push({
         category: "VELOCITY",
         title: "Cadence and estimation predictability",
-        observation: `${completedTasks.length} tasks completed with an average effort of ${averageEffortHours}h per task.`,
+        observation: `${completedTasks.length} task(s) completed with an average effort of ${averageEffortHours}h per task.`,
         recommendation:
           averageEffortHours > 8
-            ? "Split tasks exceeding 8 hours into smaller sub-tasks to maintain continuous integration momentum."
+            ? "Split tasks exceeding 8 hours into smaller sub-tasks to maintain continuous delivery momentum."
             : "Task sizing is compact and promotes rapid verification loops.",
       });
     }

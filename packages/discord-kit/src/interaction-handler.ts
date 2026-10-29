@@ -627,13 +627,15 @@ async function handleGoalCommand(
   }
 
   const result = await options.api.goalStatus(guildId, interaction.user.id);
+  const goalText = result.progress.goalStatement ?? result.progress.statement;
+  const unaligned = result.progress.unalignedTasks ?? [];
   const embed = new EmbedBuilder()
     .setTitle(`Goal · ${escapeMarkdown(result.name)}`)
-    .setDescription(`**Goal:** ${escapeMarkdown(result.progress.goalStatement)}`)
+    .setDescription(`**Goal:** ${escapeMarkdown(goalText)}`)
     .addFields(
       {
         name: "Progress",
-        value: `Must-Have: ${result.progress.completedMustHaveTasks}/${result.progress.mustHaveTasks} (${result.progress.mustHavePercentage}%)\nTotal: ${result.progress.completedTasks}/${result.progress.totalTasks} (${result.progress.percentage}%)`,
+        value: `Must-Have: ${result.progress.completedMustHaveTasks ?? result.progress.mustHaveCompleted}/${result.progress.mustHaveTasks ?? result.progress.mustHaveTotal} (${result.progress.mustHavePercentage ?? result.progress.mustHaveProgressPercent}%)\nTotal: ${result.progress.completedTasks}/${result.progress.totalTasks} (${result.progress.percentage ?? result.progress.overallProgressPercent}%)`,
         inline: true,
       },
       {
@@ -641,12 +643,12 @@ async function handleGoalCommand(
         value: `Milestone: ${escapeMarkdown(result.progress.primaryMilestone ?? "None")}\nTarget: ${result.progress.targetDate ?? "Not set"}\nCeiling: ${escapeMarkdown(result.progress.scopeCeiling ?? "None")}`,
         inline: true,
       },
-      ...(result.progress.unalignedTasks.length === 0
+      ...(unaligned.length === 0
         ? []
         : [
             {
               name: "Unaligned Tasks",
-              value: result.progress.unalignedTasks
+              value: unaligned
                 .slice(0, 5)
                 .map((t) => `• ${escapeMarkdown(t.title)}: ${escapeMarkdown(t.reason)}`)
                 .join("\n")
@@ -695,6 +697,8 @@ async function handleBrowserCommand(
   if (subcommand === "doc") {
     const url = interaction.options.getString("url", true);
     const doc = await options.api.browserDoc(guildId, interaction.user.id, url);
+    const headings = doc.headings ?? [];
+    const links = doc.links ?? [];
     const embed = new EmbedBuilder()
       .setTitle(`Doc · ${escapeMarkdown(doc.title || doc.url)}`)
       .setDescription(`**URL:** ${doc.url}\n\n${escapeMarkdown(doc.text).slice(0, 1_500)}`)
@@ -702,7 +706,7 @@ async function handleBrowserCommand(
         {
           name: "Headings",
           value:
-            doc.headings
+            headings
               .slice(0, 5)
               .map((h) => escapeMarkdown(h))
               .join(", ")
@@ -710,7 +714,7 @@ async function handleBrowserCommand(
         },
         {
           name: "Links",
-          value: `${doc.links.length} discovered link(s)`,
+          value: `${links.length} discovered link(s)`,
         },
       );
     await interaction.editReply({ embeds: [embed] });
@@ -723,10 +727,16 @@ async function handleBrowserCommand(
     .setTitle(`Knowledge Search · "${escapeMarkdown(search.query)}"`)
     .setDescription(`${search.results.length} result(s) found`)
     .addFields(
-      search.results.slice(0, 5).map((res) => ({
-        name: `[${res.sourceKind}] ${escapeMarkdown(res.title)} (score: ${res.score})`,
-        value: escapeMarkdown(res.snippet).slice(0, 250) || "No snippet",
-      })),
+      search.results.slice(0, 5).map((res) => {
+        const source =
+          (res as { sourceKind?: string; kind?: string }).sourceKind ??
+          (res as { kind?: string }).kind ??
+          "KNOWLEDGE";
+        return {
+          name: `[${source}] ${escapeMarkdown(res.title)} (score: ${res.score})`,
+          value: escapeMarkdown(res.snippet).slice(0, 250) || "No snippet",
+        };
+      }),
     );
   await interaction.editReply({ embeds: [embed] });
 }
@@ -747,7 +757,7 @@ async function handleGrillMeCommand(
       .setTitle(`Technical Interrogation · ${escapeMarkdown(questionnaire.topic)}`)
       .setDescription(`${questionnaire.questions.length} architectural question(s) generated:`)
       .addFields(
-        questionnaire.questions.slice(0, 6).map((q) => ({
+        questionnaire.questions.slice(0, 8).map((q) => ({
           name: `[${q.pillar}] ${escapeMarkdown(q.question)}`,
           value: q.options
             .map(
@@ -842,7 +852,10 @@ async function handleTeamworkPreviewCommand(
           preview.bottleneckMemberIds.length === 0
             ? "No bottleneck members detected"
             : preview.bottleneckMemberIds
-                .map((id) => `⚠️ Member \`${id}\``)
+                .map((id) => {
+                  const m = preview.members.find((member) => member.memberId === id);
+                  return `⚠️ **${escapeMarkdown(m?.displayName ?? id)}** (\`${id}\`)`;
+                })
                 .join("\n")
                 .slice(0, 1_024),
       },
@@ -915,6 +928,12 @@ async function handleBoostCommand(
   if (subcommand === "task") {
     const taskId = interaction.options.getString("task_id", true);
     const boost = await options.api.boostTask(guildId, interaction.user.id, taskId);
+    const rawBlueprint = boost as {
+      executionBlueprint?: readonly string[];
+      executionSteps?: readonly string[];
+    };
+    const blueprintSteps = rawBlueprint.executionBlueprint ?? rawBlueprint.executionSteps ?? [];
+    const checklist = boost.verificationChecklist ?? [];
     const embed = new EmbedBuilder()
       .setTitle(`Task Boost · ${escapeMarkdown(boost.title)}`)
       .setDescription(`Execution accelerator for task \`${boost.taskId}\``)
@@ -922,7 +941,7 @@ async function handleBoostCommand(
         {
           name: "Execution Blueprint",
           value:
-            boost.executionBlueprint
+            blueprintSteps
               .map((s) => `• ${escapeMarkdown(s)}`)
               .join("\n")
               .slice(0, 1_024) || "None",
@@ -930,7 +949,7 @@ async function handleBoostCommand(
         {
           name: "Verification Checklist",
           value:
-            boost.verificationChecklist
+            checklist
               .map((s) => `☐ ${escapeMarkdown(s)}`)
               .join("\n")
               .slice(0, 1_024) || "None",
@@ -952,13 +971,23 @@ async function handleBoostCommand(
       .addFields(
         plans.length === 0
           ? [{ name: "Status", value: "No active blockers require tactical unblocking." }]
-          : plans.slice(0, 5).map((plan) => ({
-              name: `[${plan.severity}] ${escapeMarkdown(plan.description)} (Save ~${plan.estimatedTimeSavedHours}h)`,
-              value: plan.tacticalSteps
-                .map((s) => `• ${escapeMarkdown(s)}`)
-                .join("\n")
-                .slice(0, 1_000),
-            })),
+          : plans.slice(0, 5).map((plan) => {
+              const raw = plan as {
+                tacticalSteps?: readonly string[];
+                action?: string;
+                estimatedTimeSavedHours?: number;
+              };
+              const steps = raw.tacticalSteps ?? (raw.action ? [raw.action] : []);
+              const hours = raw.estimatedTimeSavedHours ?? 0;
+              return {
+                name: `[${plan.severity}] ${escapeMarkdown(plan.description)}${hours > 0 ? ` (Save ~${hours}h)` : ""}`,
+                value:
+                  steps
+                    .map((s) => `• ${escapeMarkdown(s)}`)
+                    .join("\n")
+                    .slice(0, 1_000) || "None",
+              };
+            }),
       );
     await interaction.editReply({ embeds: [embed] });
     return;
@@ -971,10 +1000,22 @@ async function handleBoostCommand(
     .addFields(
       suggestions.length === 0
         ? [{ name: "Status", value: "Task graph is optimal; no adjustments recommended." }]
-        : suggestions.slice(0, 5).map((s) => ({
-            name: `[${s.type}] (${s.affectedTaskIds.length} task(s) affected)`,
-            value: escapeMarkdown(s.description).slice(0, 1_000),
-          })),
+        : suggestions.slice(0, 5).map((s) => {
+            const raw = s as {
+              type?: string;
+              category?: string;
+              description?: string;
+              details?: string;
+              affectedTaskIds?: readonly string[];
+            };
+            const type = raw.type ?? raw.category ?? "OPTIMIZATION";
+            const desc = raw.description ?? raw.details ?? "";
+            const count = raw.affectedTaskIds?.length ?? 0;
+            return {
+              name: `[${type}]${count > 0 ? ` (${count} task(s) affected)` : ""}`,
+              value: escapeMarkdown(desc).slice(0, 1_000) || "No details",
+            };
+          }),
     );
   await interaction.editReply({ embeds: [embed] });
 }

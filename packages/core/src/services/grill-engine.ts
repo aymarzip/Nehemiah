@@ -97,6 +97,27 @@ export class TechnicalGrillEngine {
         recommendedOptionKey: "MUTABLE_WITH_LOCKING",
       },
       {
+        pillar: "AUTH_SECURITY",
+        question: `What authentication and authorization boundary protects "${normalizedTopic}"?`,
+        tradeoff:
+          "Fine-grained RBAC guards against unauthorized escalation but adds latency and permission matrix complexity.",
+        options: [
+          {
+            key: "ROLE_BASED_GUARD",
+            label: "Explicit workspace/guild role check before service dispatch",
+            pros: "Zero unauthorized mutation risk, deterministic audit records.",
+            cons: "Requires team profile context for every invocation.",
+          },
+          {
+            key: "PERMISSIVE_INTERNAL",
+            label: "Rely solely on network/internal API token boundary",
+            pros: "Low latency, trivial internal microservice chaining.",
+            cons: "Compromised internal caller has unrestricted domain access.",
+          },
+        ],
+        recommendedOptionKey: "ROLE_BASED_GUARD",
+      },
+      {
         pillar: "API_CONTRACTS",
         question: `How should failures and partial successes be communicated to callers for "${normalizedTopic}"?`,
         tradeoff:
@@ -116,6 +137,69 @@ export class TechnicalGrillEngine {
           },
         ],
         recommendedOptionKey: "TYPED_DOMAIN_ERRORS",
+      },
+      {
+        pillar: "UX_FLOW",
+        question: `How should long-running operations or waiting states be presented for "${normalizedTopic}"?`,
+        tradeoff:
+          "Instant ephemeral deferrals keep UI responsive but require async message updates and polling handling.",
+        options: [
+          {
+            key: "DEFERRED_EPHEMERAL",
+            label: "Immediate ephemeral deferral with rich status edit",
+            pros: "Never times out Discord 3-second gateway budget, clean private UX.",
+            cons: "Requires followup message tracking.",
+          },
+          {
+            key: "SYNCHRONOUS_BLOCK",
+            label: "Synchronous blocking reply directly in channel",
+            pros: "Single network roundtrip, visible to entire channel.",
+            cons: "Fails gateway timeout if operation exceeds 3,000ms.",
+          },
+        ],
+        recommendedOptionKey: "DEFERRED_EPHEMERAL",
+      },
+      {
+        pillar: "PERFORMANCE",
+        question: `What caching and context budgeting strategy governs "${normalizedTopic}" under load?`,
+        tradeoff:
+          "Aggressive caching saves tokens and database roundtrips but risks serving stale graph state.",
+        options: [
+          {
+            key: "SUBGRAPH_SLICING",
+            label: "Token-bounded graph slicing with 2-hop neighborhood pruning",
+            pros: "Cuts LLM context tokens by up to 80% with zero relevance loss.",
+            cons: "Slight compute cost for neighborhood discovery.",
+          },
+          {
+            key: "FULL_DUMP",
+            label: "Unbounded project task dump into context",
+            pros: "Complete global context always available.",
+            cons: "Hits token window limits on projects with over 50 tasks.",
+          },
+        ],
+        recommendedOptionKey: "SUBGRAPH_SLICING",
+      },
+      {
+        pillar: "DEPLOYMENT",
+        question: `How should migrations and rolling restarts be managed for "${normalizedTopic}"?`,
+        tradeoff:
+          "Backward-compatible dual-write migrations allow zero-downtime deploys but require multi-phase rollouts.",
+        options: [
+          {
+            key: "EXPAND_CONTRACT",
+            label: "Dual-read expand/contract schema evolution",
+            pros: "Zero downtime, old and new application instances co-exist safely.",
+            cons: "Requires two deployment cycles to clean up legacy columns.",
+          },
+          {
+            key: "MAINTENANCE_MIGRATION",
+            label: "Single-phase exclusive schema lock with maintenance window",
+            pros: "Fast and simple, no intermediate compatibility shims.",
+            cons: "Requires transient downtime or queue pausing.",
+          },
+        ],
+        recommendedOptionKey: "EXPAND_CONTRACT",
       },
       {
         pillar: "EDGE_CASES",
@@ -152,11 +236,31 @@ export class TechnicalGrillEngine {
     answers: readonly GrillAnswerInput[],
     taskId?: string,
   ): GrillDecisionDraft {
-    const rationaleParts = answers.map(
-      (a) =>
-        `Q: ${a.question}\nChosen Option: ${a.selectedOptionKey}${a.notes ? ` (${a.notes})` : ""}`,
-    );
-    const alternatives = answers.map((a) => `Alternative for: ${a.question}`);
+    const questions = this.generateQuestions(topic, taskId).questions;
+    const questionMap = new Map(questions.map((q) => [q.question, q]));
+
+    const rationaleParts: string[] = [];
+    const alternatives: string[] = [];
+
+    for (const a of answers) {
+      const q = questionMap.get(a.question);
+      const chosenOption = q?.options.find((o) => o.key === a.selectedOptionKey);
+      const chosenLabel = chosenOption
+        ? `${chosenOption.key}: ${chosenOption.label}`
+        : a.selectedOptionKey;
+      rationaleParts.push(
+        `Q: ${a.question}\nSelected: ${chosenLabel}${a.notes ? `\nRationale: ${a.notes}` : ""}`,
+      );
+
+      if (q) {
+        const rejected = q.options.filter((o) => o.key !== a.selectedOptionKey);
+        for (const rej of rejected) {
+          alternatives.push(`${rej.key} (${rej.label}): Rejected due to cons: ${rej.cons}`);
+        }
+      } else {
+        alternatives.push(`Alternative considered for question: ${a.question}`);
+      }
+    }
 
     return {
       type: "ARCHITECTURE",
@@ -167,7 +271,7 @@ export class TechnicalGrillEngine {
         : `Architectural trade-off interrogation for ${topic}.`,
       rationale: rationaleParts.join("\n\n"),
       outcome: `Agreed technical pattern for ${topic} with explicit boundary, data, and degradation rules.`,
-      alternatives,
+      alternatives: alternatives.length > 0 ? alternatives : ["Standard inline extension"],
     };
   }
 }

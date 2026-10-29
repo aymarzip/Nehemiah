@@ -795,12 +795,13 @@ describe("Phase 1 HTTP vertical slice", () => {
       logger: logger(),
     });
     try {
-      await app.inject({
+      const setup = await app.inject({
         method: "POST",
         url: "/v1/projects/setup",
         headers: internalHeaders,
         payload: setupPayload,
       });
+      const { projectId } = setup.json<{ projectId: string }>();
 
       await app.inject({
         method: "POST",
@@ -818,7 +819,6 @@ describe("Phase 1 HTTP vertical slice", () => {
         },
       });
 
-      // 1. Goal endpoints
       const goalGet = await app.inject({
         method: "GET",
         url: "/v1/goal?discordGuildId=guild-1&externalUserId=owner-user",
@@ -845,7 +845,6 @@ describe("Phase 1 HTTP vertical slice", () => {
         "Updated project goal statement",
       );
 
-      // 2. Browser endpoints
       const browserRepo = await app.inject({
         method: "GET",
         url: "/v1/browser/repo?discordGuildId=guild-1&externalUserId=developer-user",
@@ -865,7 +864,6 @@ describe("Phase 1 HTTP vertical slice", () => {
       expect(browserSearch.statusCode).toBe(200);
       expect(browserSearch.json()).toHaveProperty("results");
 
-      // 3. Grill-me endpoints
       const grillStart = await app.inject({
         method: "POST",
         url: "/v1/grill-me/start",
@@ -878,7 +876,7 @@ describe("Phase 1 HTTP vertical slice", () => {
       });
       expect(grillStart.statusCode).toBe(200);
       const grillSession = grillStart.json<{ questions: { question: string }[] }>();
-      expect(grillSession.questions.length).toBeGreaterThan(0);
+      expect(grillSession.questions.length).toBe(8);
 
       const grillAnswer = await app.inject({
         method: "POST",
@@ -901,7 +899,6 @@ describe("Phase 1 HTTP vertical slice", () => {
       expect(grillAnswer.statusCode).toBe(200);
       expect(grillAnswer.json()).toHaveProperty("decisionId");
 
-      // 4. Teamwork-preview endpoint
       const teamwork = await app.inject({
         method: "GET",
         url: "/v1/teamwork-preview?discordGuildId=guild-1&externalUserId=developer-user",
@@ -911,7 +908,6 @@ describe("Phase 1 HTTP vertical slice", () => {
       expect(teamwork.json()).toHaveProperty("members");
       expect(teamwork.json()).toHaveProperty("handoffs");
 
-      // 5. Learning endpoints
       const learnInsights = await app.inject({
         method: "GET",
         url: "/v1/learning/insights?discordGuildId=guild-1&externalUserId=developer-user",
@@ -933,7 +929,40 @@ describe("Phase 1 HTTP vertical slice", () => {
       });
       expect(learnRecord.statusCode).toBe(201);
 
-      // 6. Boost endpoints
+      const taskCreate = await app.inject({
+        method: "POST",
+        url: `/v1/projects/${projectId}/tasks`,
+        headers: internalHeaders,
+        payload: {
+          externalUserId: "owner-user",
+          title: "Setup Core Mechanics",
+          estimatedEffortHours: 4,
+          expectedOutcome: "Playable core",
+        },
+      });
+      expect(taskCreate.statusCode).toBe(201);
+      const createdTask = taskCreate.json<{ id: string }>();
+
+      const boostTaskRes = await app.inject({
+        method: "POST",
+        url: "/v1/boost/task",
+        headers: internalHeaders,
+        payload: {
+          discordGuildId: "guild-1",
+          externalUserId: "developer-user",
+          taskId: createdTask.id,
+        },
+      });
+      expect(boostTaskRes.statusCode).toBe(200);
+      const boostTaskBody = boostTaskRes.json<{
+        taskId: string;
+        executionSteps: string[];
+        executionBlueprint: string[];
+      }>();
+      expect(boostTaskBody.taskId).toBe(createdTask.id);
+      expect(boostTaskBody.executionSteps.length).toBeGreaterThan(0);
+      expect(boostTaskBody.executionBlueprint).toEqual(boostTaskBody.executionSteps);
+
       const unblockRes = await app.inject({
         method: "POST",
         url: "/v1/boost/unblock",

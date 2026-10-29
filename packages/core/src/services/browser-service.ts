@@ -16,15 +16,24 @@ export function isSafePublicUrl(rawUrl: string): SafeUrlCheck {
     return { safe: false, reason: "Only http and https protocols are supported." };
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  let hostname = parsed.hostname.toLowerCase();
+  if (hostname.startsWith("[") && hostname.endsWith("]")) {
+    hostname = hostname.slice(1, -1);
+  }
+
   if (
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
     hostname === "0.0.0.0" ||
     hostname === "::1" ||
+    hostname === "::" ||
     hostname === "internal" ||
     hostname.endsWith(".local") ||
-    hostname.endsWith(".internal")
+    hostname.endsWith(".internal") ||
+    hostname.startsWith("fe80:") ||
+    hostname.startsWith("fc00:") ||
+    hostname.startsWith("fd00:") ||
+    hostname.startsWith("::ffff:")
   ) {
     return { safe: false, reason: "Internal and localhost addresses are prohibited." };
   }
@@ -48,20 +57,48 @@ export function isSafePublicUrl(rawUrl: string): SafeUrlCheck {
   return { safe: true, url: parsed };
 }
 
-export function cleanHtmlContent(html: string): { title?: string; text: string } {
+export interface CleanedHtml {
+  readonly title?: string | undefined;
+  readonly text: string;
+  readonly headings: readonly string[];
+  readonly links: readonly string[];
+}
+
+export function cleanHtmlContent(html: string): CleanedHtml {
   const titleMatch = /<title[^>]*>([^<]+)<\/title>/i.exec(html);
   const title = titleMatch?.[1]?.trim();
 
+  const headings: string[] = [];
+  const headingRegex = /<h[1-3][^<>]*>([^<]+)<\/h[1-3]>/gi;
+  let hMatch: RegExpExecArray | null;
+  while ((hMatch = headingRegex.exec(html)) !== null && headings.length < 10) {
+    const headingText = hMatch[1]?.trim();
+    if (headingText && !headings.includes(headingText)) {
+      headings.push(headingText);
+    }
+  }
+
+  const links: string[] = [];
+  const linkRegex = /href=["'](https?:\/\/[^"'>\s]+)["']/gi;
+  let lMatch: RegExpExecArray | null;
+  while ((lMatch = linkRegex.exec(html)) !== null && links.length < 15) {
+    const linkUrl = lMatch[1]?.trim();
+    if (linkUrl && !links.includes(linkUrl)) {
+      links.push(linkUrl);
+    }
+  }
+
   let text = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, " ")
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ")
-    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<[^<>]*>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -69,11 +106,17 @@ export function cleanHtmlContent(html: string): { title?: string; text: string }
     text = `${text.slice(0, 2_000)}...`;
   }
 
-  return { ...(title ? { title } : {}), text };
+  return {
+    ...(title ? { title } : {}),
+    text,
+    headings,
+    links,
+  };
 }
 
 export interface KnowledgeSearchItem {
   readonly kind: "MEMORY" | "DECISION" | "GITHUB";
+  readonly sourceKind: "MEMORY" | "DECISION" | "GITHUB";
   readonly title: string;
   readonly snippet: string;
   readonly score: number;
@@ -83,7 +126,14 @@ export class ProjectBrowserService {
   async fetchDoc(
     rawUrl: string,
     fetchFn: typeof fetch = fetch,
-  ): Promise<{ url: string; title?: string; text: string }> {
+  ): Promise<{
+    url: string;
+    title?: string;
+    text: string;
+    headings: readonly string[];
+    links: readonly string[];
+    fetchedAt: string;
+  }> {
     const check = isSafePublicUrl(rawUrl);
     if (!check.safe || check.url === undefined) {
       throw new Error(`Unsafe URL: ${check.reason}`);
@@ -108,6 +158,9 @@ export class ProjectBrowserService {
         url: check.url.toString(),
         ...(cleaned.title ? { title: cleaned.title } : {}),
         text: cleaned.text,
+        headings: cleaned.headings,
+        links: cleaned.links,
+        fetchedAt: new Date().toISOString(),
       };
     } finally {
       clearTimeout(timeout);
@@ -142,6 +195,7 @@ export class ProjectBrowserService {
       if (matchCount > 0) {
         results.push({
           kind: "MEMORY",
+          sourceKind: "MEMORY",
           title: mem.title,
           snippet: mem.content.slice(0, 300),
           score: matchCount * 10,
@@ -158,6 +212,7 @@ export class ProjectBrowserService {
       if (matchCount > 0) {
         results.push({
           kind: "DECISION",
+          sourceKind: "DECISION",
           title: dec.title,
           snippet: dec.rationale.slice(0, 300),
           score: matchCount * 12,
@@ -174,6 +229,7 @@ export class ProjectBrowserService {
       if (matchCount > 0) {
         results.push({
           kind: "GITHUB",
+          sourceKind: "GITHUB",
           title: `${act.kind}: ${act.externalId}`,
           snippet: act.url ?? act.branch ?? "GitHub activity",
           score: matchCount * 8,

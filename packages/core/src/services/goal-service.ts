@@ -4,6 +4,7 @@ import type { Task } from "../domain/task.js";
 
 export interface GoalProgressSummary {
   readonly statement: string;
+  readonly goalStatement: string;
   readonly targetOutcome: string;
   readonly problem: string;
   readonly successCriteria: readonly string[];
@@ -13,9 +14,13 @@ export interface GoalProgressSummary {
   readonly totalTasks: number;
   readonly completedTasks: number;
   readonly mustHaveTotal: number;
+  readonly mustHaveTasks: number;
   readonly mustHaveCompleted: number;
+  readonly completedMustHaveTasks: number;
   readonly overallProgressPercent: number;
+  readonly percentage: number;
   readonly mustHaveProgressPercent: number;
+  readonly mustHavePercentage: number;
   readonly unalignedTaskIds: readonly string[];
   readonly isMustHaveComplete: boolean;
 }
@@ -46,6 +51,7 @@ export class GoalService {
 
     return {
       statement: vision.statement,
+      goalStatement: vision.statement,
       targetOutcome: vision.targetOutcome,
       problem: vision.problem,
       successCriteria: vision.successCriteria,
@@ -55,9 +61,13 @@ export class GoalService {
       totalTasks: total,
       completedTasks: completed,
       mustHaveTotal,
+      mustHaveTasks: mustHaveTotal,
       mustHaveCompleted,
+      completedMustHaveTasks: mustHaveCompleted,
       overallProgressPercent,
+      percentage: overallProgressPercent,
       mustHaveProgressPercent,
+      mustHavePercentage: mustHaveProgressPercent,
       unalignedTaskIds: unaligned,
       isMustHaveComplete: mustHaveTotal > 0 && mustHaveCompleted === mustHaveTotal,
     };

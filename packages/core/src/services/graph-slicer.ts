@@ -11,15 +11,17 @@ function normalizeDependencies(
   dependencies: readonly DependencyLike[],
 ): TaskDependency[] {
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
-  return dependencies.map((d) =>
-    d instanceof TaskDependency
-      ? d
-      : new TaskDependency({
-          projectId: taskMap.get(d.dependantTaskId)?.projectId ?? "project-1",
-          dependantTaskId: d.dependantTaskId,
-          dependencyTaskId: d.dependencyTaskId,
-        }),
-  );
+  return dependencies
+    .filter((d) => taskMap.has(d.dependantTaskId) && taskMap.has(d.dependencyTaskId))
+    .map((d) =>
+      d instanceof TaskDependency
+        ? d
+        : new TaskDependency({
+            projectId: taskMap.get(d.dependantTaskId)?.projectId ?? "project-1",
+            dependantTaskId: d.dependantTaskId,
+            dependencyTaskId: d.dependencyTaskId,
+          }),
+    );
 }
 
 export interface SlicedContext {
@@ -47,12 +49,22 @@ export class GraphSlicer {
     dependencies: readonly DependencyLike[],
     maxNeighborhoodSize = 40,
   ): SlicedContext {
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
+    if (!taskMap.has(targetTaskId)) {
+      return {
+        tasks: [],
+        dependencies: [],
+        totalProjectTasks: tasks.length,
+        prunedTasksCount: tasks.length,
+        tokenSavingsPercent: 100,
+      };
+    }
+
     const normalized = normalizeDependencies(tasks, dependencies);
     const graph = new TaskGraph(tasks, normalized);
     const includedTaskIds = new Set<string>();
     includedTaskIds.add(targetTaskId);
 
-    // Add immediate dependencies and dependants (up to 2 levels)
     let frontier = [targetTaskId];
     for (let depth = 0; depth < 2 && frontier.length > 0; depth++) {
       const nextFrontier: string[] = [];
@@ -69,14 +81,12 @@ export class GraphSlicer {
       frontier = nextFrontier;
     }
 
-    // Add remaining critical path tasks if budget remains
-    const critical = graph.criticalPath({ remainingOnly: true }).taskIds;
+    const critical = graph.hasCycle() ? [] : graph.criticalPath({ remainingOnly: true }).taskIds;
     for (const critId of critical) {
       if (includedTaskIds.size >= maxNeighborhoodSize) break;
       includedTaskIds.add(critId);
     }
 
-    const taskMap = new Map(tasks.map((t) => [t.id, t]));
     const slicedTasks = Array.from(includedTaskIds)
       .map((id) => taskMap.get(id))
       .filter((t): t is Task => t !== undefined);
@@ -105,15 +115,11 @@ export class GraphSlicer {
   ): SlicedContext {
     const normalized = normalizeDependencies(tasks, dependencies);
     const graph = new TaskGraph(tasks, normalized);
-    const critical = new Set(graph.criticalPath({ remainingOnly: true }).taskIds);
+    const critical = new Set(
+      graph.hasCycle() ? [] : graph.criticalPath({ remainingOnly: true }).taskIds,
+    );
     const ready = new Set(graph.getReadyTasks().map((t) => t.id));
 
-    // Sort tasks by priority:
-    // 1. Critical path & uncompleted
-    // 2. IN_PROGRESS & BLOCKED
-    // 3. READY
-    // 4. Recently completed
-    // 5. PLANNED
     const scored = tasks
       .filter((t) => t.status !== "CANCELLED")
       .map((t) => {

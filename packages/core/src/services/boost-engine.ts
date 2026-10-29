@@ -13,21 +13,24 @@ function normalizeDependencies(
   )[],
 ): TaskDependency[] {
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
-  return dependencies.map((d) =>
-    d instanceof TaskDependency
-      ? d
-      : new TaskDependency({
-          projectId: taskMap.get(d.dependantTaskId)?.projectId ?? "project-1",
-          dependantTaskId: d.dependantTaskId,
-          dependencyTaskId: d.dependencyTaskId,
-        }),
-  );
+  return dependencies
+    .filter((d) => taskMap.has(d.dependantTaskId) && taskMap.has(d.dependencyTaskId))
+    .map((d) =>
+      d instanceof TaskDependency
+        ? d
+        : new TaskDependency({
+            projectId: taskMap.get(d.dependantTaskId)?.projectId ?? "project-1",
+            dependantTaskId: d.dependantTaskId,
+            dependencyTaskId: d.dependencyTaskId,
+          }),
+    );
 }
 
 export interface TaskBoostBlueprint {
   readonly taskId: string;
   readonly title: string;
   readonly executionSteps: readonly string[];
+  readonly executionBlueprint: readonly string[];
   readonly verificationChecklist: readonly string[];
   readonly aiPromptTemplate: string;
   readonly potentialRisks: readonly string[];
@@ -39,13 +42,18 @@ export interface TacticalUnblockAction {
   readonly severity: string;
   readonly action: string;
   readonly rationale: string;
+  readonly tacticalSteps: readonly string[];
+  readonly estimatedTimeSavedHours: number;
 }
 
 export interface DeliveryOptimization {
   readonly title: string;
   readonly category: "PARALLELIZE" | "SCOPE_REDUCTION" | "FAST_TRACK";
+  readonly type: string;
   readonly details: string;
+  readonly description: string;
   readonly estimatedHoursSaved: number;
+  readonly affectedTaskIds: readonly string[];
 }
 
 export class BoostEngine {
@@ -104,6 +112,7 @@ export class BoostEngine {
       taskId: task.id,
       title: task.title,
       executionSteps,
+      executionBlueprint: executionSteps,
       verificationChecklist,
       aiPromptTemplate,
       potentialRisks,
@@ -133,12 +142,16 @@ export class BoostEngine {
         rationale = "Clears stale or conflicting pull request check runs.";
       }
 
+      const estimatedTimeSavedHours = b.severity === "CRITICAL" ? 8 : b.severity === "HIGH" ? 4 : 2;
+
       actions.push({
         blockerId: b.id,
         description: b.description,
         severity: b.severity,
         action,
         rationale,
+        tacticalSteps: [action],
+        estimatedTimeSavedHours,
       });
     }
 
@@ -153,7 +166,9 @@ export class BoostEngine {
     )[],
   ): readonly DeliveryOptimization[] {
     const graph = new TaskGraph(tasks, normalizeDependencies(tasks, dependencies));
-    const critical = new Set(graph.criticalPath({ remainingOnly: true }).taskIds);
+    const critical = new Set(
+      graph.hasCycle() ? [] : graph.criticalPath({ remainingOnly: true }).taskIds,
+    );
     const optimizations: DeliveryOptimization[] = [];
 
     const optionalInPath = tasks.filter(
@@ -167,22 +182,32 @@ export class BoostEngine {
       optimizations.push({
         title: `Deschedule non-critical task "${opt.title}" from critical path`,
         category: "SCOPE_REDUCTION",
+        type: "SCOPE_REDUCTION",
         details: `Task is marked OPTIONAL or NICE tier but sits on the remaining critical path. Removing or deferring it saves ${opt.estimatedEffortHours}h.`,
+        description: `Task is marked OPTIONAL or NICE tier but sits on the remaining critical path. Removing or deferring it saves ${opt.estimatedEffortHours}h.`,
         estimatedHoursSaved: opt.estimatedEffortHours,
+        affectedTaskIds: [opt.id],
       });
     }
 
     const readyTasks = graph.getReadyTasks().filter((t) => t.status === "READY");
     if (readyTasks.length >= 2) {
       const hours = readyTasks.reduce((acc, t) => acc + t.estimatedEffortHours, 0);
+      const readyIds = readyTasks.map((t) => t.id);
       optimizations.push({
         title: "Parallelize unblocked ready tasks across available teammates",
         category: "PARALLELIZE",
+        type: "PARALLELIZE",
         details: `${readyTasks.length} tasks (${readyTasks
           .map((t) => t.title)
           .slice(0, 3)
           .join(", ")}) are unblocked and ready for concurrent implementation.`,
+        description: `${readyTasks.length} tasks (${readyTasks
+          .map((t) => t.title)
+          .slice(0, 3)
+          .join(", ")}) are unblocked and ready for concurrent implementation.`,
         estimatedHoursSaved: Math.round(hours * 0.4),
+        affectedTaskIds: readyIds,
       });
     }
 

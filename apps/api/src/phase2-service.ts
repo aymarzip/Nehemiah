@@ -1610,10 +1610,30 @@ export class Phase2ApplicationService {
     const { project } = await this.#authorizeGuild(discordGuildId, externalUserId);
     const state = await this.#state(project, now);
     const progress = this.#goalService.computeProgress(coreProject(project), state.tasks);
+    const taskMap = new Map(state.tasks.map((t) => [t.id, t]));
+    const unalignedTasks = progress.unalignedTaskIds.map((id) => {
+      const t = taskMap.get(id);
+      return {
+        id,
+        title: t?.title ?? id,
+        reason: t?.scopeTier === "NICE" ? "Nice-to-have tier" : "Optional criticality",
+      };
+    });
     return {
       projectId: project.id,
       name: project.name,
-      progress,
+      progress: {
+        ...progress,
+        goalStatement: progress.statement,
+        percentage: progress.overallProgressPercent,
+        mustHaveTasks: progress.mustHaveTotal,
+        completedMustHaveTasks: progress.mustHaveCompleted,
+        mustHavePercentage: progress.mustHaveProgressPercent,
+        targetDate: project.deadline?.toISOString(),
+        primaryMilestone: (project as unknown as { milestones?: readonly { name?: string }[] })
+          .milestones?.[0]?.name,
+        unalignedTasks,
+      },
     };
   }
 

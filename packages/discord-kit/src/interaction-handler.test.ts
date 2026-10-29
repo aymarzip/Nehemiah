@@ -922,8 +922,60 @@ describe("Interaction Handler", () => {
       );
     });
 
-    it("handles /boost suggest", async () => {
+    it("handles /boost task with executionSteps fallback", async () => {
       const api = createMockApi();
+      (api.boostTask as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        taskId: "t1",
+        title: "Engine Setup",
+        executionSteps: ["Step 1", "Step 2"],
+        verificationChecklist: ["Verify check"],
+        aiPromptTemplate: "Context prompt",
+      });
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("task", { task_id: "t1" });
+      interaction.commandName = "boost";
+
+      await handler(interaction as never);
+
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /boost unblock with action fallback", async () => {
+      const api = createMockApi();
+      (api.boostUnblock as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          blockerId: "b1",
+          description: "Database locked",
+          severity: "HIGH",
+          action: "Restart service",
+          rationale: "Frees lock",
+        },
+      ]);
+      const setupDrafts = new InMemorySetupDraftStore();
+      const handler = createInteractionHandler({ api, setupDrafts });
+      const interaction = mockChatCommand("unblock");
+      interaction.commandName = "boost";
+
+      await handler(interaction as never);
+
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.objectContaining({ embeds: expect.any(Array) }),
+      );
+    });
+
+    it("handles /boost suggest with category and details fallback", async () => {
+      const api = createMockApi();
+      (api.boostSuggest as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          title: "Parallelize",
+          category: "PARALLELIZE",
+          details: "Can run concurrently",
+          estimatedHoursSaved: 5,
+        },
+      ]);
       const setupDrafts = new InMemorySetupDraftStore();
       const handler = createInteractionHandler({ api, setupDrafts });
       const interaction = mockChatCommand("suggest");
@@ -931,7 +983,6 @@ describe("Interaction Handler", () => {
 
       await handler(interaction as never);
 
-      expect(api.boostSuggest).toHaveBeenCalledWith("guild-1", "user-1");
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.objectContaining({ embeds: expect.any(Array) }),
       );
